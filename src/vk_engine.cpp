@@ -70,15 +70,15 @@ void VulkanEngine::init_vulkan()
     vkb::PhysicalDeviceSelector selector{vkb_inst};
 
     vkb::PhysicalDevice physicalDevice = selector
-        .set_minimum_version(1, 3)
-        .set_required_features_13(features)
-        .set_required_features_12(features1_2)
-        .set_surface(this->_surface)
-        .select()
-        .value();
+                                             .set_minimum_version(1, 3)
+                                             .set_required_features_13(features)
+                                             .set_required_features_12(features1_2)
+                                             .set_surface(this->_surface)
+                                             .select()
+                                             .value();
 
     // Create the final vulkan device
-    vkb::DeviceBuilder deviceBuilder { physicalDevice };
+    vkb::DeviceBuilder deviceBuilder{physicalDevice};
     vkb::Device vkbDevice = deviceBuilder.build().value();
 
     // Get the VkDevice handle used in the rest of the vulkan application
@@ -93,21 +93,31 @@ void VulkanEngine::init_swapchain()
 
 void VulkanEngine::create_swapchain(uint32_t width, uint32_t height)
 {
-    vkb::SwapchainBuilder swapchainBuilder{this->_chosenGPU, this->_device, this->_surface };
+    vkb::SwapchainBuilder swapchainBuilder{this->_chosenGPU, this->_device, this->_surface};
     _swapchainImageFormat = VK_FORMAT_B8G8R8_UNORM; // 32 bit format
 
     vkb::Swapchain vkbSwapchain = swapchainBuilder
-        .set_desired_format(VkSurfaceFormatKHR{.format = this->_swapchainImageFormat, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
-        .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
-        .set_desired_extent(width, height)
-        .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-        .build()
-        .value();
+                                      .set_desired_format(VkSurfaceFormatKHR{.format = this->_swapchainImageFormat, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
+                                      .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
+                                      .set_desired_extent(width, height)
+                                      .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+                                      .build()
+                                      .value();
 
     this->_swapchainExtent = vkbSwapchain.extent;
     this->_swapchain = vkbSwapchain.swapchain;
     this->_swapchainImages = vkbSwapchain.get_images().value();
     this->_swapchainImageViews = vkbSwapchain.get_image_views().value();
+}
+
+void VulkanEngine::destroy_swapchain()
+{
+    vkDestroySwapchainKHR(this->_device, this->_swapchain, nullptr);
+
+    for (int i = 0; i < _swapchainImageViews.size(); i++)
+    {
+        vkDestroyImageView(this->_device, this->_swapchainImageViews[i], nullptr);
+    }
 }
 
 void VulkanEngine::init_commands()
@@ -122,7 +132,14 @@ void VulkanEngine::cleanup()
 {
     if (_isInitialized)
     {
+        // Perform all of the clean up operations
+        destroy_swapchain();
 
+        vkDestroySurfaceKHR(this->_instance, this->_surface, nullptr);
+        vkDestroyDevice(_device, nullptr);
+
+        vkb::destroy_debug_utils_messenger(this->_instance, this->_debugMessenger);
+        vkDestroyInstance(this->_instance, nullptr);
         SDL_DestroyWindow(_window);
     }
 
