@@ -10,6 +10,8 @@
 #include <chrono>
 #include <thread>
 
+#include "VkBootstrap.h"
+
 VulkanEngine* loadedEngine = nullptr;
 
 VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
@@ -32,8 +34,33 @@ void VulkanEngine::init()
         _windowExtent.height,
         window_flags);
 
+    init_vulkan();
+    init_swapchain();
+    init_commands();
+    init_sync_structures();
+
     // everything went fine
     _isInitialized = true;
+}
+
+void VulkanEngine::init_vulkan() 
+{
+
+}
+
+void VulkanEngine::init_swapchain()
+{
+
+}
+
+void VulkanEngine::init_commands()
+{
+
+}
+
+void VulkanEngine::init_sync_structures()
+{
+
 }
 
 void VulkanEngine::cleanup()
