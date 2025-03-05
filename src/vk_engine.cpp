@@ -75,7 +75,8 @@ void VulkanEngine::run()
             }
 
             if (e.type == SDL_KEYUP) {
-                fmt::print("Key up detected");
+                fmt::println("Released: {}", e.key.keysym.sym);
+                fmt::println("Key up detected");
             }
         }
 
