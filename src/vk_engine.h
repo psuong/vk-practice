@@ -5,9 +5,17 @@
 
 #include <vk_types.h>
 
+constexpr unsigned int FRAME_OVERLAP = 2;
+
+struct FrameData {
+	VkCommandPool _commandPool;
+	VkCommandBuffer _mainCommandBuffer;
+};
+
 class VulkanEngine
 {
 public:
+
 	bool _isInitialized{false};
 	int _frameNumber{0};
 	bool stop_rendering{false};
@@ -15,6 +23,11 @@ public:
 
 	// Forward declaration without having to include the SDL header
 	struct SDL_Window *_window{nullptr};
+
+	FrameData _frames[FRAME_OVERLAP];
+
+	VkQueue _graphicsQueue;
+	uint32_t _graphicsQueueFamily;
 
 	static VulkanEngine &Get();
 
@@ -30,6 +43,7 @@ public:
 	// run main loop
 	void run();
 
+	FrameData& get_current_frame() { return _frames[_frameNumber % FRAME_OVERLAP]; };
 private:
 	VkInstance _instance;					   // Vulkan library handle
 	VkDebugUtilsMessengerEXT _debugMessenger; // Vulkan debug output handle
@@ -43,6 +57,8 @@ private:
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
 	VkExtent2D _swapchainExtent;
+
+	int _frameNumber;
 
 	void init_vulkan();
 	void init_swapchain();

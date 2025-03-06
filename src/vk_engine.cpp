@@ -84,6 +84,9 @@ void VulkanEngine::init_vulkan()
     // Get the VkDevice handle used in the rest of the vulkan application
     this->_device = vkbDevice.device;
     this->_chosenGPU = physicalDevice.physical_device;
+
+    this->_graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
+    this->_graphicsQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
 }
 
 void VulkanEngine::init_swapchain()
@@ -122,6 +125,25 @@ void VulkanEngine::destroy_swapchain()
 
 void VulkanEngine::init_commands()
 {
+    VkCommandPoolCreateInfo commandPoolInfo = {};
+    commandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    commandPoolInfo.pNext = nullptr;
+    commandPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    // We say that the command buffer is compatible with the graphics queue family
+    commandPoolInfo.queueFamilyIndex = this->_graphicsQueueFamily;
+
+    for (int i = 0; i < FRAME_OVERLAP; i++) 
+    {
+        VK_CHECK(vkCreateCommandPool(this->_device, &commandPoolInfo, nullptr, &_frames[i]._commandPool));
+
+        VkCommandBufferAllocateInfo cmdAllocInfo = {};
+		cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		cmdAllocInfo.pNext = nullptr;
+		cmdAllocInfo.commandPool = this->_frames[i]._commandPool;
+		cmdAllocInfo.commandBufferCount = 1;
+		cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		VK_CHECK(vkAllocateCommandBuffers(_device, &cmdAllocInfo, &_frames[i]._mainCommandBuffer));
+    }
 }
 
 void VulkanEngine::init_sync_structures()
