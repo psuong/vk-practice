@@ -10,6 +10,13 @@ constexpr unsigned int FRAME_OVERLAP = 2;
 struct FrameData {
 	VkCommandPool _commandPool;
 	VkCommandBuffer _mainCommandBuffer;
+
+	// The swapchain semaphore is used for that render commands wait on the swapchain image request.
+	VkSemaphore _swapchainSemaphore;
+
+	// The renderSemaphore controls presenting the image to the OS once the drawing finishes
+	VkSemaphore _renderSemaphore;
+	VkFence _renderFence;
 };
 
 class VulkanEngine
@@ -57,8 +64,6 @@ private:
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
 	VkExtent2D _swapchainExtent;
-
-	int _frameNumber;
 
 	void init_vulkan();
 	void init_swapchain();

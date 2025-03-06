@@ -132,28 +132,43 @@ void VulkanEngine::init_commands()
     // We say that the command buffer is compatible with the graphics queue family
     commandPoolInfo.queueFamilyIndex = this->_graphicsQueueFamily;
 
-    for (int i = 0; i < FRAME_OVERLAP; i++) 
+    for (int i = 0; i < FRAME_OVERLAP; i++)
     {
         VK_CHECK(vkCreateCommandPool(this->_device, &commandPoolInfo, nullptr, &_frames[i]._commandPool));
+        // Allocate the default cmd buffer to use for rendering
+        VkCommandBufferAllocateInfo cmdAllocInfo = vkinit::command_buffer_allocate_info(_frames[i]._commandPool, 1);
 
-        VkCommandBufferAllocateInfo cmdAllocInfo = {};
-		cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		cmdAllocInfo.pNext = nullptr;
-		cmdAllocInfo.commandPool = this->_frames[i]._commandPool;
-		cmdAllocInfo.commandBufferCount = 1;
-		cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		VK_CHECK(vkAllocateCommandBuffers(_device, &cmdAllocInfo, &_frames[i]._mainCommandBuffer));
+        VK_CHECK(vkAllocateCommandBuffers(this->_device, &cmdAllocInfo, &this->_frames[i]._mainCommandBuffer));
     }
 }
 
 void VulkanEngine::init_sync_structures()
 {
+    // First fence controls when the gpu finished rendering the frame
+    // 2 semaphore to synchronize rendering with swapchain
+    // The fence signals so we can wait on it on the first frame
+    VkFenceCreateInfo fenceCreateInfo = vkinit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
+    VkSemaphoreCreateInfo semaphoreCreateInfo = vkinit::semaphore_create_info();
+
+    for (int i = 0; i < FRAME_OVERLAP; i++) {
+        FrameData& frameData = this->_frames[i];
+        VK_CHECK(vkCreateFence(this->_device, &fenceCreateInfo, nullptr, &frameData._renderFence));
+
+        VK_CHECK(vkCreateSemaphore(this->_device, &semaphoreCreateInfo, nullptr, &frameData._swapchainSemaphore));
+        VK_CHECK(vkCreateSemaphore(this->_device, &semaphoreCreateInfo, nullptr, &frameData._renderSemaphore));
+    }
 }
 
 void VulkanEngine::cleanup()
 {
     if (_isInitialized)
     {
+        vkDeviceWaitIdle(this->_device);
+
+        // Free the command pool
+        for (int i = 0; i < FRAME_OVERLAP; i++) {
+            vkDestroyCommandPool(this->_device, this->_frames[i]._commandPool, nullptr);
+        }
         // Perform all of the clean up operations
         destroy_swapchain();
 
