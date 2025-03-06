@@ -205,7 +205,7 @@ void VulkanEngine::draw()
     uint32_t swapchainImageIndex;
     // When acquiring the image from the swapchain, we request an available one. We have a timeout to wait
     // until the next image is available if there is none available.
-    VK_CHECK(vkAcquireNextImageKHR(device, this->_swapchain, 1000000000, frameData._swapchainSemaphore, nullptr, &swapchainImageIndex));
+    VK_CHECK(vkAcquireNextImageKHR(device, this->_swapchain, 1000000000, frameData._swapchainSemaphore, VK_NULL_HANDLE, &swapchainImageIndex));
 
     VkCommandBuffer cmd = frameData._mainCommandBuffer;
     // Ensure that our cmd buffer is resetted

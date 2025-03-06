@@ -1,6 +1,6 @@
+# Inside src/CMakeLists.txt
 
-# Add source to this project's executable.
-add_executable (engine 
+add_executable(engine 
   main.cpp
   vk_types.h
   vk_initializers.cpp
@@ -19,15 +19,45 @@ add_executable (engine
   camera.h
 )
 
+# Set C++ standard
 set_property(TARGET engine PROPERTY CXX_STANDARD 20)
+
+# Add compile definitions (for GLM)
 target_compile_definitions(engine PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
-target_include_directories(engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
-target_link_libraries(engine PUBLIC vma glm Vulkan::Vulkan fmt::fmt stb_image SDL2::SDL2 vkbootstrap imgui fastgltf::fastgltf)
+# Add include directories
+target_include_directories(engine PUBLIC 
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${PROJECT_SOURCE_DIR}/third_party/SDL/include"  # Add SDL2 include directory, because clang is throwing errors (still compiles tho)
+)
 
-target_precompile_headers(engine PUBLIC <optional> <vector> <memory> <string> <vector> <unordered_map> <glm/mat4x4.hpp>  <glm/vec4.hpp> <vulkan/vulkan.h>)
+# Link libraries (including SDL2)
+target_link_libraries(engine PUBLIC 
+    vma 
+    glm 
+    Vulkan::Vulkan 
+    fmt::fmt 
+    stb_image 
+    SDL2::SDL2
+    vkbootstrap 
+    imgui 
+    fastgltf::fastgltf
+)
 
+# Set up precompiled headers
+target_precompile_headers(engine PUBLIC 
+    <optional> 
+    <vector> 
+    <memory> 
+    <string> 
+    <unordered_map> 
+    <glm/mat4x4.hpp>  
+    <glm/vec4.hpp> 
+    <vulkan/vulkan.h>
+)
+
+# Copy DLLs after build (if needed)
 add_custom_command(TARGET engine POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:engine> $<TARGET_FILE_DIR:engine>
   COMMAND_EXPAND_LISTS
-  )
+)

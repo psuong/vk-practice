@@ -1,1 +1,3 @@
 CompilationDatabase: ./build
+compile_flags:
+  - -I./third_party/SDL/include
