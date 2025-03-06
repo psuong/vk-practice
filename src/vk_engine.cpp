@@ -11,6 +11,7 @@
 #include <thread>
 
 #include "VkBootstrap.h"
+#include "vk_images.h"
 
 VulkanEngine *loadedEngine = nullptr;
 
@@ -186,7 +187,30 @@ void VulkanEngine::cleanup()
 
 void VulkanEngine::draw()
 {
-    // nothing yet
+    FrameData& frameData = get_current_frame();
+    VkDevice device = this->_device;
+
+    // Wait until the GPU finished rendering the last frame, with a timeout of 1 second
+    VK_CHECK(vkWaitForFences(device, 1, &frameData._renderFence, true, 1000000000));
+    VK_CHECK(vkResetFences(device, 1, &frameData._renderFence));
+
+    uint32_t swapchainImageIndex;
+    // When acquiring the image from the swapchain, we request an available one. We have a timeout to wait
+    // until the next image is available if there is none available.
+    VK_CHECK(vkAcquireNextImageKHR(device, this->_swapchain, 1000000000, frameData._swapchainSemaphore, nullptr, &swapchainImageIndex));
+
+    VkCommandBuffer cmd = frameData._mainCommandBuffer;
+    // Ensure that our cmd buffer is resetted
+    VK_CHECK(vkResetCommandBuffer(cmd, 0));
+
+    // Begin recording, we use the command buffer exactly once
+    VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+    // Begin recording
+    VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
+
+    // For start, transition the swapchain image to a drawable layout, then clear it, and finally transition it back for display
+    vkutil::transition_image(cmd, this->_swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 }
 
 void VulkanEngine::run()
