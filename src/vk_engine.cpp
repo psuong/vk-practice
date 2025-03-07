@@ -1,4 +1,5 @@
 ﻿//> includes
+#include <vulkan/vulkan_core.h>
 #define VMA_IMPLEMENTATION
 #include "vk_engine.h"
 #include "vk_mem_alloc.h"
@@ -113,13 +114,35 @@ void VulkanEngine::init_swapchain()
         this->_windowExtent.height,
         1
     };
+
+    // 64 bits per pixel
     this->_drawImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
     this->_drawImage.imageExtent = drawImageExtent;
 
     VkImageUsageFlags drawImageUsages{};
-    drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    drawImageUsages = 
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+        VK_IMAGE_USAGE_STORAGE_BIT |
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    VkImageCreateInfo rimg_info = vkinit::image_create_info(this->_drawImage.imageFormat, drawImageUsages, drawImageExtent);
+    VkImageCreateInfo rimgInfo = vkinit::image_create_info(this->_drawImage.imageFormat, drawImageUsages, drawImageExtent);
+    
+    // Allocate the image on gpu local memory
+    VmaAllocationCreateInfo rimgAllocInfo = {};
+    rimgAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    rimgAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    vmaCreateImage(this->_allocator, &rimgInfo, &rimgAllocInfo, &_drawImage.image, &_drawImage.allocation, VK_NULL_HANDLE);
+
+    // Allocate and create the image
+    VkImageViewCreateInfo rViewInfo = vkinit::imageview_create_info(this->_drawImage.imageFormat, this->_drawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
+    VK_CHECK(vkCreateImageView(this->_device, &rViewInfo, VK_NULL_HANDLE, &this->_drawImage.imageView));
+
+    // Add to the deletion queue because we've allocated memory on the gpu
+    this->_mainDeletionQueue.push_function([=, this]() {
+        vkDestroyImageView(this->_device, this->_drawImage.imageView, VK_NULL_HANDLE);
+        vmaDestroyImage(this->_allocator, this->_drawImage.image, this->_drawImage.allocation);
+    });
 }
 
 void VulkanEngine::create_swapchain(uint32_t width, uint32_t height)
@@ -247,22 +270,29 @@ void VulkanEngine::draw()
     // Begin recording, we use the command buffer exactly once
     VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
+    this->_drawExtent.width = this->_drawImage.imageExtent.width;
+    this->_drawExtent.height = this->_drawImage.imageExtent.height;
+
     // Begin recording
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
+    // Transition the main draw image into a general layout to write to it
+    // Then overwrite it all, b/c we dont care about what the older layout was
+    vkutil::transition_image(cmd, this->_drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+
+    this->draw_background(cmd);
+
     // For start, transition the swapchain image to a drawable layout, then clear it, and finally transition it back for display
-    vkutil::transition_image(cmd, this->_swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-
-    VkClearColorValue clearValue;
-    float flash = std::abs(std::sin(this->_frameNumber / 120.f));
-    clearValue = {{0.0f, 0.0f, flash, 1.0f}};
-
-    VkImageSubresourceRange clearRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
-
-    vkCmdClearColorImage(cmd, this->_swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &clearRange);
+    vkutil::transition_image(cmd, this->_drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
     // Change the swapchain back to a format that works for displays
-    vkutil::transition_image(cmd, this->_swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+    vkutil::transition_image(cmd, this->_swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    // Execute a copy from the draw image into the swapchain
+    vkutil::copy_image_to_image(cmd, this->_drawImage.image, this->_swapchainImages[swapchainImageIndex], this->_drawExtent, this->_swapchainExtent);
+    
+    // Set the swapchain image layout to present so wecan show it on the screen.
+    vkutil::transition_image(cmd, this->_swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     VK_CHECK(vkEndCommandBuffer(cmd));
 
@@ -300,6 +330,16 @@ void VulkanEngine::draw()
     VK_CHECK(vkQueuePresentKHR(this->_graphicsQueue, &presentInfo));
 
     this->_frameNumber++;
+}
+
+void VulkanEngine::draw_background(VkCommandBuffer cmd)
+{
+    VkClearColorValue clearValue;
+    float flash = std::abs(std::sin(this->_frameNumber / 120.f));
+    clearValue = {{0.0f, 0.0f, flash, 1.0f}};
+
+    VkImageSubresourceRange clearRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
+ 	vkCmdClearColorImage(cmd, this->_drawImage.image, VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &clearRange);
 }
 
 void VulkanEngine::run()
