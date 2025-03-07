@@ -56,6 +56,9 @@ public:
 	VkDescriptorSet _drawImageDescriptors;
 	VkDescriptorSetLayout _drawImageDescriptorLayout;
 
+    VkPipeline _gradientPipeline;
+    VkPipelineLayout _gradientPipelineLayout;
+
 	// initializes everything in the engine
 	void init();
 
@@ -95,6 +98,9 @@ private:
     void init_descriptors();
 	void create_swapchain(uint32_t width, uint32_t height);
 	void destroy_swapchain();
+
+    void init_pipelines();
+    void init_background_pipelines();
 
     void draw_background(VkCommandBuffer cmd);
 };

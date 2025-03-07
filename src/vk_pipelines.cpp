@@ -1,10 +1,11 @@
-﻿#include <vector>
-#include <vk_pipelines.h>
-#include <fstream>
+﻿#include <fstream>
+#include <vector>
 #include <vk_initializers.h>
+#include <vk_pipelines.h>
 #include <vulkan/vulkan_core.h>
 
-bool vkutil::load_shader_module(const char *filePath, VkDevice device, VkShaderModule *outShaderModule) {
+bool vkutil::load_shader_module(const char *filePath, VkDevice device,
+                                VkShaderModule *outShaderModule) {
     // Open the file with the ptr at the end
     std::ifstream file(filePath, std::ios::ate | std::ios::binary);
 
@@ -20,7 +21,7 @@ bool vkutil::load_shader_module(const char *filePath, VkDevice device, VkShaderM
 
     // Reset the ptr to the head
     file.seekg(0);
-    file.read((char*)buffer.data(), fileSize);
+    file.read((char *)buffer.data(), fileSize);
 
     // Close the file
     file.close();
@@ -28,15 +29,18 @@ bool vkutil::load_shader_module(const char *filePath, VkDevice device, VkShaderM
     // Create the shader module
     VkShaderModuleCreateInfo createInfo = {
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .pNext = nullptr, 
+        .pNext = nullptr,
         .codeSize = buffer.size() * sizeof(uint32_t), // In bytes
-        .pCode = buffer.data(), // Actual code
+        .pCode = buffer.data(),                       // Actual code
     };
 
     VkShaderModule shaderModule;
-    if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+    if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) !=
+        VK_SUCCESS) {
+        fmt::println("Failed");
         return false;
     }
+    fmt::println("Success");
     *outShaderModule = shaderModule;
     return true;
 }

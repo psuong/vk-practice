@@ -1,9 +1,11 @@
 ﻿//> includes
+#include <cmath>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 #define VMA_IMPLEMENTATION
 #include "vk_engine.h"
 #include "vk_mem_alloc.h"
+#include "vk_pipelines.h"
 #include "vk_types.h"
 
 #include <SDL.h>
@@ -40,6 +42,8 @@ void VulkanEngine::init() {
     init_commands();
     init_sync_structures();
     init_descriptors();
+
+    init_pipelines();
 
     // everything went fine
     _isInitialized = true;
@@ -251,15 +255,60 @@ void VulkanEngine::init_descriptors() {
         .dstBinding = 0,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-        .pImageInfo = &imgInfo
-    };
+        .pImageInfo = &imgInfo};
 
     vkUpdateDescriptorSets(this->_device, 1, &drawImageWrite, 0, nullptr);
-    
+
     // Clean up the descriptor allocator and new layout
     this->_mainDeletionQueue.push_function([&]() {
         this->globalDescriptorAllocator.destroy_pool(this->_device);
-        vkDestroyDescriptorSetLayout(this->_device, this->_drawImageDescriptorLayout, nullptr);
+        vkDestroyDescriptorSetLayout(this->_device,
+                                     this->_drawImageDescriptorLayout, nullptr);
+    });
+}
+
+void VulkanEngine::init_pipelines() { this->init_background_pipelines(); }
+
+void VulkanEngine::init_background_pipelines() {
+    VkPipelineLayoutCreateInfo computeLayout{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext = nullptr,
+        .setLayoutCount = 1,
+        .pSetLayouts = &this->_drawImageDescriptorLayout,
+    };
+
+    VK_CHECK(vkCreatePipelineLayout(this->_device, &computeLayout, nullptr,
+                                    &this->_gradientPipelineLayout));
+
+    VkShaderModule computeDrawShader;
+    if (!vkutil::load_shader_module("../../shaders/gradient.comp.spv", this->_device,
+                                    &computeDrawShader)) {
+        fmt::println("[ERROR] Cannot build the compute shader");
+    }
+
+    VkPipelineShaderStageCreateInfo stageInfo{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .pNext = nullptr,
+        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+        .module = computeDrawShader,
+        .pName = "main"};
+
+    VkComputePipelineCreateInfo computePipelineCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .pNext = nullptr,
+        .stage = stageInfo,
+        .layout = this->_gradientPipelineLayout,
+    };
+    VK_CHECK(vkCreateComputePipelines(this->_device, VK_NULL_HANDLE, 1,
+                                      &computePipelineCreateInfo, nullptr,
+                                      &this->_gradientPipeline));
+
+    // Clean up the compute pipeline
+    vkDestroyShaderModule(this->_device, computeDrawShader, nullptr);
+    this->_mainDeletionQueue.push_function([&]() {
+        vkDestroyPipelineLayout(this->_device, this->_gradientPipelineLayout,
+                                nullptr);
+        vkDestroyPipeline(this->_device, this->_gradientPipeline, nullptr);
     });
 }
 
@@ -415,6 +464,15 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd) {
         vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
     vkCmdClearColorImage(cmd, this->_drawImage.image, VK_IMAGE_LAYOUT_GENERAL,
                          &clearValue, 1, &clearRange);
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                      this->_gradientPipeline);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                            this->_gradientPipelineLayout, 0, 1,
+                            &this->_drawImageDescriptors, 0, nullptr);
+
+    vkCmdDispatch(cmd, std::ceil(this->_drawExtent.width / 16.0),
+                  std::ceil(this->_drawExtent.height / 16.0), 1);
 }
 
 void VulkanEngine::run() {

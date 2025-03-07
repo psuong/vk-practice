@@ -55,6 +55,7 @@ void DescriptorAllocator::init_pool(VkDevice device, uint32_t maxSets,
         .flags = 0,
         .maxSets = maxSets,
         .poolSizeCount = (uint32_t)poolSizes.size(),
+        .pPoolSizes = poolSizes.data()
     };
 
     vkCreateDescriptorPool(device, &poolInfo, nullptr, &pool);
