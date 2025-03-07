@@ -3,9 +3,19 @@
 
 #pragma once
 
+#include "deletion_queue.h"
+#include "vk_mem_alloc.h"
 #include <vk_types.h>
 
 constexpr unsigned int FRAME_OVERLAP = 2;
+
+struct AllocatedImage {
+    VkImage image;
+    VkImageView imageView;
+    VmaAllocation allocation;
+    VkExtent3D imageExtent;
+    VkFormat imageFormat;
+};
 
 struct FrameData {
 	VkCommandPool _commandPool;
@@ -17,6 +27,8 @@ struct FrameData {
 	// The renderSemaphore controls presenting the image to the OS once the drawing finishes
 	VkSemaphore _renderSemaphore;
 	VkFence _renderFence;
+
+    DeletionQueue _deletionQueue;
 };
 
 class VulkanEngine
@@ -64,6 +76,11 @@ private:
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
 	VkExtent2D _swapchainExtent;
+
+    DeletionQueue _mainDeletionQueue;
+    VmaAllocator _allocator;
+    AllocatedImage _drawImage;
+    VkExtent2D _drawExtent;
 
 	void init_vulkan();
 	void init_swapchain();

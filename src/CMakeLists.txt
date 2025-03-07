@@ -17,6 +17,7 @@ add_executable(engine
   vk_loader.cpp
   camera.cpp
   camera.h
+  deletion_queue.h
 )
 
 # Set C++ standard

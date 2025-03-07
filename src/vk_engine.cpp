@@ -1,5 +1,7 @@
 ﻿//> includes
+#define VMA_IMPLEMENTATION
 #include "vk_engine.h"
+#include "vk_mem_alloc.h"
 
 #include <SDL.h>
 #include <SDL_vulkan.h>
@@ -88,11 +90,36 @@ void VulkanEngine::init_vulkan()
 
     this->_graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
     this->_graphicsQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
+
+    // Initialize the memory allocator
+    VmaAllocatorCreateInfo allocatorInfo = {};
+    allocatorInfo.physicalDevice = this->_chosenGPU;
+    allocatorInfo.device = this->_device;
+    allocatorInfo.instance = this->_instance;
+    allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+    vmaCreateAllocator(&allocatorInfo, &this->_allocator);
+
+    this->_mainDeletionQueue.push_function([&]() {
+        fmt::println("Releasing VMA");
+        vmaDestroyAllocator(this->_allocator);
+    });
 }
 
 void VulkanEngine::init_swapchain()
 {
     this->create_swapchain(_windowExtent.width, _windowExtent.height);
+    VkExtent3D drawImageExtent = {
+        this->_windowExtent.width,
+        this->_windowExtent.height,
+        1
+    };
+    this->_drawImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+    this->_drawImage.imageExtent = drawImageExtent;
+
+    VkImageUsageFlags drawImageUsages{};
+    drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+    VkImageCreateInfo rimg_info = vkinit::image_create_info(this->_drawImage.imageFormat, drawImageUsages, drawImageExtent);
 }
 
 void VulkanEngine::create_swapchain(uint32_t width, uint32_t height)
@@ -178,6 +205,8 @@ void VulkanEngine::cleanup()
             vkDestroySemaphore(this->_device, frameData._renderSemaphore, nullptr);
             vkDestroySemaphore(this->_device, frameData._swapchainSemaphore, nullptr);
         }
+        this->_mainDeletionQueue.flush();
+
         // Perform all of the clean up operations
         destroy_swapchain();
 
@@ -200,6 +229,10 @@ void VulkanEngine::draw()
 
     // Wait until the GPU finished rendering the last frame, with a timeout of 1 second
     VK_CHECK(vkWaitForFences(device, 1, &frameData._renderFence, true, 1000000000));
+
+    // Flush the deletion queue
+    frameData._deletionQueue.flush();
+
     VK_CHECK(vkResetFences(device, 1, &frameData._renderFence));
 
     uint32_t swapchainImageIndex;
@@ -294,12 +327,6 @@ void VulkanEngine::run()
                 {
                     stop_rendering = false;
                 }
-            }
-
-            if (e.type == SDL_KEYUP)
-            {
-                fmt::println("Released: {}", e.key.keysym.sym);
-                fmt::println("Key up detected");
             }
         }
 
