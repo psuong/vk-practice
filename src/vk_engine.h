@@ -4,6 +4,7 @@
 #pragma once
 
 #include "deletion_queue.h"
+#include "vk_descriptors.h"
 #include "vk_mem_alloc.h"
 #include <vk_types.h>
 
@@ -50,6 +51,11 @@ public:
 
 	static VulkanEngine &Get();
 
+	DescriptorAllocator globalDescriptorAllocator;
+
+	VkDescriptorSet _drawImageDescriptors;
+	VkDescriptorSetLayout _drawImageDescriptorLayout;
+
 	// initializes everything in the engine
 	void init();
 
@@ -64,11 +70,11 @@ public:
 
 	FrameData& get_current_frame() { return _frames[_frameNumber % FRAME_OVERLAP]; };
 private:
-	VkInstance _instance;					   // Vulkan library handle
-	VkDebugUtilsMessengerEXT _debugMessenger; // Vulkan debug output handle
-	VkPhysicalDevice _chosenGPU;			   // GPU chosen as the default device
-	VkDevice _device;						   // Vulkan device for commands
-	VkSurfaceKHR _surface;					   // Vulkan window surface
+	VkInstance _instance;					    // Vulkan library handle
+	VkDebugUtilsMessengerEXT _debugMessenger;   // Vulkan debug output handle
+	VkPhysicalDevice _chosenGPU;			    // GPU chosen as the default device
+	VkDevice _device;						    // Vulkan device for commands
+	VkSurfaceKHR _surface;					    // Vulkan window surface
 
 	VkSwapchainKHR _swapchain;
 	VkFormat _swapchainImageFormat;
@@ -86,6 +92,7 @@ private:
 	void init_swapchain();
 	void init_commands();
 	void init_sync_structures();
+    void init_descriptors();
 	void create_swapchain(uint32_t width, uint32_t height);
 	void destroy_swapchain();
 
