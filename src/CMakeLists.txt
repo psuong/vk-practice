@@ -15,6 +15,7 @@ add_executable(engine
   vk_engine.cpp
   vk_loader.h
   vk_loader.cpp
+  utils.h
   camera.cpp
   camera.h
   deletion_queue.h
@@ -47,7 +48,6 @@ target_link_libraries(engine PUBLIC
 
 # Set up precompiled headers
 target_precompile_headers(engine PUBLIC 
-    <filesystem>
     <optional> 
     <vector> 
     <memory> 
