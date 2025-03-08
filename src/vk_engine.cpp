@@ -1,4 +1,6 @@
 ﻿//> includes
+#include <windows.h>
+#include <filesystem>
 #include <cmath>
 #include <vector>
 #include <vulkan/vulkan_core.h>
@@ -281,7 +283,14 @@ void VulkanEngine::init_background_pipelines() {
                                     &this->_gradientPipelineLayout));
 
     VkShaderModule computeDrawShader;
-    if (!vkutil::load_shader_module("../../shaders/gradient.comp.spv", this->_device,
+
+    char buffer[MAX_PATH];
+    GetModuleFileNameA(NULL, buffer, MAX_PATH);
+    std::filesystem::path exePath = buffer;
+    std::string computeShaderPath = (exePath.parent_path() / "shaders/gradient.spv").string();
+    fmt::println("Exe path: {}", computeShaderPath);
+
+    if (!vkutil::load_shader_module(computeShaderPath.c_str(), this->_device,
                                     &computeDrawShader)) {
         fmt::println("[ERROR] Cannot build the compute shader");
     }

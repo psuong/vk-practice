@@ -10,6 +10,7 @@ bool vkutil::load_shader_module(const char *filePath, VkDevice device,
     std::ifstream file(filePath, std::ios::ate | std::ios::binary);
 
     if (!file.is_open()) {
+        fmt::println("Failed to find: {}", filePath);
         return false;
     }
 

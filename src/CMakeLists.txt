@@ -47,6 +47,7 @@ target_link_libraries(engine PUBLIC
 
 # Set up precompiled headers
 target_precompile_headers(engine PUBLIC 
+    <filesystem>
     <optional> 
     <vector> 
     <memory> 
