@@ -162,7 +162,11 @@ void VulkanEngine::init_swapchain() {
 void VulkanEngine::create_swapchain(uint32_t width, uint32_t height) {
     vkb::SwapchainBuilder swapchainBuilder{this->_chosenGPU, this->_device,
                                            this->_surface};
-    _swapchainImageFormat = VK_FORMAT_B8G8R8_UNORM; // 32 bit format
+    // Because we need to draw imgui which requires the alpha channel, we 
+    // change from 
+    // VK_FORMAT_B8G8R8_UNORM 
+    // VK_FORMAT_B8G8R8A8_UNORM
+    this->_swapchainImageFormat = VK_FORMAT_B8G8R8A8_UNORM; // 32 bit format
 
     vkb::Swapchain vkbSwapchain =
         swapchainBuilder
@@ -184,7 +188,7 @@ void VulkanEngine::create_swapchain(uint32_t width, uint32_t height) {
 void VulkanEngine::destroy_swapchain() {
     vkDestroySwapchainKHR(this->_device, this->_swapchain, nullptr);
 
-    for (int i = 0; i < _swapchainImageViews.size(); i++) {
+    for (int i = 0; i < this->_swapchainImageViews.size(); i++) {
         vkDestroyImageView(this->_device, this->_swapchainImageViews[i],
                            nullptr);
     }
