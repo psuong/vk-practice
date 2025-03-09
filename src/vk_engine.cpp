@@ -62,7 +62,7 @@ void VulkanEngine::init_vulkan() {
     // Use the debugger
     auto inst = builder.set_app_name("Vk Renderer")
                     .request_validation_layers(true)
-                    .use_default_debug_messenger()
+                    .use_default_debug_messenger() // TODO: Write my own debug callback to print out the line #
                     .require_api_version(1, 3, 0)
                     .build();
 
@@ -162,9 +162,9 @@ void VulkanEngine::init_swapchain() {
 void VulkanEngine::create_swapchain(uint32_t width, uint32_t height) {
     vkb::SwapchainBuilder swapchainBuilder{this->_chosenGPU, this->_device,
                                            this->_surface};
-    // Because we need to draw imgui which requires the alpha channel, we 
-    // change from 
-    // VK_FORMAT_B8G8R8_UNORM 
+    // Because we need to draw imgui which requires the alpha channel, we
+    // change from
+    // VK_FORMAT_B8G8R8_UNORM
     // VK_FORMAT_B8G8R8A8_UNORM
     this->_swapchainImageFormat = VK_FORMAT_B8G8R8A8_UNORM; // 32 bit format
 
@@ -532,7 +532,8 @@ void VulkanEngine::draw() {
                                 this->_swapchainImages[swapchainImageIndex],
                                 this->_drawExtent, this->_swapchainExtent);
 
-    // Set the swapchain image layout to present so we can show it on the screen.
+    // Set the swapchain image layout to present so we can show it on the
+    // screen.
     vkutil::transition_image(cmd, this->_swapchainImages[swapchainImageIndex],
                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                              VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -540,7 +541,8 @@ void VulkanEngine::draw() {
     // draw imgui into the swapchain
     this->draw_imgui(cmd, this->_swapchainImageViews[swapchainImageIndex]);
 
-    // set the swapchain image layout to present to actually be able to show it on screen
+    // set the swapchain image layout to present to actually be able to show it
+    // on screen
     vkutil::transition_image(cmd, this->_swapchainImages[swapchainImageIndex],
                              VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                              VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);

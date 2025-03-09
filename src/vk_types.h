@@ -21,11 +21,21 @@
 #include <glm/vec4.hpp>
 
 
-#define VK_CHECK(x)                                                     \
-    do {                                                                \
-        VkResult err = x;                                               \
-        if (err) {                                                      \
-            fmt::println("Detected Vulkan error: {}", string_VkResult(err)); \
-            abort();                                                    \
-        }                                                               \
+template <>
+struct fmt::formatter<VkResult> {
+    constexpr auto parse(fmt::format_parse_context& ctx) { return ctx.begin(); }
+
+    auto format(VkResult result, fmt::format_context& ctx) const {
+        return fmt::format_to(ctx.out(), "{}", fmt::string_view(string_VkResult(result)));
+    }
+};
+
+#define VK_CHECK(x)                                                           \
+    do {                                                                      \
+        VkResult err = x;                                                     \
+        if (err != VK_SUCCESS) {                                              \
+            fmt::println("Vulkan error: {} at {}:{} - {}",                    \
+                         err, __FILE__, __LINE__, string_VkResult(err));      \
+            abort();                                                          \
+        }                                                                     \
     } while (0)
