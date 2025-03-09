@@ -213,6 +213,7 @@ void VulkanEngine::init_commands() {
                                      &this->_frames[i]._mainCommandBuffer));
     }
 
+    // > imgui
     // Allocate command buffer for immediate submissions
     VK_CHECK(vkCreateCommandPool(this->_device, &commandPoolInfo, nullptr,
                                  &this->_immCommandPool));
@@ -247,6 +248,7 @@ void VulkanEngine::init_sync_structures() {
                                    &frameData._renderSemaphore));
     }
 
+    // > imgui
     // Initialize imgui's fence
     VK_CHECK(vkCreateFence(this->_device, &fenceCreateInfo, nullptr,
                            &this->_immFence));
@@ -374,6 +376,7 @@ void VulkanEngine::immediate_submit(
 }
 
 void VulkanEngine::init_imgui() {
+    // Create the descriptor pool
     VkDescriptorPoolSize poolSizes[] = {
         {VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
@@ -519,17 +522,27 @@ void VulkanEngine::draw() {
                              VK_IMAGE_LAYOUT_UNDEFINED,
                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
+    // > Begin drawing imgui
     // Execute a copy from the draw image into the swapchain
     vkutil::copy_image_to_image(cmd, this->_drawImage.image,
                                 this->_swapchainImages[swapchainImageIndex],
                                 this->_drawExtent, this->_swapchainExtent);
 
-    // Set the swapchain image layout to present so wecan show it on the screen.
+    // Set the swapchain image layout to present so we can show it on the screen.
     vkutil::transition_image(cmd, this->_swapchainImages[swapchainImageIndex],
                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+    // draw imgui into the swapchain
+    this->draw_imgui(cmd, this->_swapchainImageViews[swapchainImageIndex]);
+
+    // set the swapchain image layout to present to actually be able to show it on screen
+    vkutil::transition_image(cmd, this->_swapchainImages[swapchainImageIndex],
+                             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                              VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     VK_CHECK(vkEndCommandBuffer(cmd));
+    // < End drawing imgui
 
     // Prepare the submission to the queue
     VkCommandBufferSubmitInfo cmdInfo = vkinit::command_buffer_submit_info(cmd);
@@ -553,9 +566,8 @@ void VulkanEngine::draw() {
                             frameData._renderFence));
 
     // Present the image
-    VkPresentInfoKHR presentInfo = {};
-    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    presentInfo.pNext = nullptr;
+
+    VkPresentInfoKHR presentInfo = vkinit::present_info();
 
     // we have a single swapchain
     presentInfo.pSwapchains = &this->_swapchain;
@@ -570,6 +582,21 @@ void VulkanEngine::draw() {
     VK_CHECK(vkQueuePresentKHR(this->_graphicsQueue, &presentInfo));
 
     this->_frameNumber++;
+}
+
+void VulkanEngine::draw_imgui(VkCommandBuffer cmd,
+                              VkImageView targetImageView) {
+    VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(
+        targetImageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+    VkRenderingInfo renderInfo = vkinit::rendering_info(
+        this->_swapchainExtent, &colorAttachment, nullptr);
+
+    vkCmdBeginRendering(cmd, &renderInfo);
+
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+
+    vkCmdEndRendering(cmd);
 }
 
 void VulkanEngine::draw_background(VkCommandBuffer cmd) {

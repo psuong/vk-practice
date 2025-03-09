@@ -74,6 +74,9 @@ public:
 
 	// draw loop
 	void draw();
+    
+    // draw our ui
+    void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 
 	// run main loop
 	void run();
