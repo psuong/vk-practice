@@ -6,7 +6,9 @@
 #include "deletion_queue.h"
 #include "vk_descriptors.h"
 #include "vk_mem_alloc.h"
+#include <functional>
 #include <vk_types.h>
+#include <vulkan/vulkan_core.h>
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
@@ -39,7 +41,7 @@ public:
 	bool _isInitialized{false};
 	int _frameNumber{0};
 	bool stop_rendering{false};
-	VkExtent2D _windowExtent{1700, 900};
+	VkExtent2D _windowExtent{1600, 900};
 
 	// Forward declaration without having to include the SDL header
 	struct SDL_Window *_window{nullptr};
@@ -58,6 +60,11 @@ public:
 
     VkPipeline _gradientPipeline;
     VkPipelineLayout _gradientPipelineLayout;
+
+    // Immediate submit structures
+    VkFence _immFence;
+    VkCommandBuffer _immCommandBuffer;
+    VkCommandPool _immCommandPool;
 
 	// initializes everything in the engine
 	void init();
@@ -101,6 +108,9 @@ private:
 
     void init_pipelines();
     void init_background_pipelines();
+
+    void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
+    void init_imgui();
 
     void draw_background(VkCommandBuffer cmd);
 };
