@@ -60,11 +60,13 @@ void VulkanEngine::init_vulkan() {
     vkb::InstanceBuilder builder;
 
     // Use the debugger
-    auto inst = builder.set_app_name("Vk Renderer")
-                    .request_validation_layers(true)
-                    .use_default_debug_messenger() // TODO: Write my own debug callback to print out the line #
-                    .require_api_version(1, 3, 0)
-                    .build();
+    auto inst =
+        builder.set_app_name("Vk Renderer")
+            .request_validation_layers(true)
+            .use_default_debug_messenger() // TODO: Write my own debug callback
+                                           // to print out the line #
+            .require_api_version(1, 3, 0)
+            .build();
 
     vkb::Instance vkb_inst = inst.value();
     this->_instance = vkb_inst.instance;
@@ -303,7 +305,26 @@ void VulkanEngine::init_descriptors() {
     });
 }
 
-void VulkanEngine::init_pipelines() { this->init_background_pipelines(); }
+void VulkanEngine::init_pipelines() {
+    this->init_background_pipelines();
+
+    VkPushConstantRange pushConstants{
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        .offset = 0,
+        .size = sizeof(ComputePushConstants),
+    };
+
+    VkPipelineLayoutCreateInfo computeLayout{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext = nullptr,
+        .setLayoutCount = 1,
+        .pSetLayouts = &this->_drawImageDescriptorLayout,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &pushConstants,
+    };
+    VK_CHECK(vkCreatePipelineLayout(this->_device, &computeLayout, nullptr,
+                                    &this->_gradientPipelineLayout));
+}
 
 void VulkanEngine::init_background_pipelines() {
     VkPipelineLayoutCreateInfo computeLayout{
@@ -316,12 +337,21 @@ void VulkanEngine::init_background_pipelines() {
     VK_CHECK(vkCreatePipelineLayout(this->_device, &computeLayout, nullptr,
                                     &this->_gradientPipelineLayout));
 
-    VkShaderModule computeDrawShader;
+    // TODO: Load the sky shader module
+    VkShaderModule gradientDrawShader;
 
     char buffer[MAX_PATH];
     if (!vkutil::load_shader_module(
-            utils::get_shader_path(buffer, MAX_PATH, "shaders\\gradient.spv"),
-            this->_device, &computeDrawShader)) {
+            utils::get_shader_path(buffer, MAX_PATH,
+                                   "shaders\\gradient_color.spv"),
+            this->_device, &gradientDrawShader)) {
+        fmt::println("[ERROR] Cannot build the gradient compute shader");
+    }
+
+    if (!vkutil::load_shader_module(
+            utils::get_shader_path(buffer, MAX_PATH,
+                                   "shaders\\gradient_color.spv"),
+            this->_device, &gradientDrawShader)) {
         fmt::println("[ERROR] Cannot build the compute shader");
     }
 
@@ -329,7 +359,7 @@ void VulkanEngine::init_background_pipelines() {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         .pNext = nullptr,
         .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-        .module = computeDrawShader,
+        .module = gradientDrawShader,
         .pName = "main"};
 
     VkComputePipelineCreateInfo computePipelineCreateInfo{
@@ -343,7 +373,7 @@ void VulkanEngine::init_background_pipelines() {
                                       &this->_gradientPipeline));
 
     // Clean up the compute pipeline
-    vkDestroyShaderModule(this->_device, computeDrawShader, nullptr);
+    vkDestroyShaderModule(this->_device, gradientDrawShader, nullptr);
     this->_mainDeletionQueue.push_function([&]() {
         vkDestroyPipelineLayout(this->_device, this->_gradientPipelineLayout,
                                 nullptr);
@@ -620,7 +650,16 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd) {
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                             this->_gradientPipelineLayout, 0, 1,
                             &this->_drawImageDescriptors, 0, nullptr);
+    // Set up the push constants
+    ComputePushConstants pc{.data1 = glm::vec4(1, 0, 0, 1),
+                            .data2 = glm::vec4(0, 0, 1, 1)};
 
+    vkCmdPushConstants(cmd, this->_gradientPipelineLayout,
+                       VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                       sizeof(ComputePushConstants), &pc);
+
+	// Execute the compute pipeline dispatch. We are using 16x16 
+    // workgroup size so we need to divide by it
     vkCmdDispatch(cmd, std::ceil(this->_drawExtent.width / 16.0),
                   std::ceil(this->_drawExtent.height / 16.0), 1);
 }

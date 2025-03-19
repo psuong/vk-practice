@@ -4,6 +4,7 @@
 #pragma once
 
 #include "deletion_queue.h"
+#include "glm/ext/vector_float4.hpp"
 #include "vk_descriptors.h"
 #include "vk_mem_alloc.h"
 #include <functional>
@@ -18,6 +19,20 @@ struct AllocatedImage {
     VmaAllocation allocation;
     VkExtent3D imageExtent;
     VkFormat imageFormat;
+};
+
+struct ComputePushConstants {
+    glm::vec4 data1;
+    glm::vec4 data2;
+    glm::vec4 data3;
+    glm::vec4 data4;
+};
+
+struct ComputeEffect {
+    const char* name;
+    VkPipeline pipeline;
+    VkPipelineLayout layout;
+    ComputePushConstants data;
 };
 
 struct FrameData {
@@ -100,6 +115,9 @@ private:
     VmaAllocator _allocator;
     AllocatedImage _drawImage;
     VkExtent2D _drawExtent;
+
+    std::vector<ComputeEffect> backgroundEffects;
+    int currentBackgroundEffect{0};
 
 	void init_vulkan();
 	void init_swapchain();
