@@ -8,12 +8,12 @@ float Noise2d(float2 x) {
 }
 
 float NoisyStarField(float2 vSamplePos, float fThreshhold) {
-    float StarVal = Noise2d(vSamplePos);
-    if (StarVal >= fThreshhold)
-        StarVal = pow((StarVal - fThreshhold) / (1.0 - fThreshhold), 6.0);
+    float star_val = Noise2d(vSamplePos);
+    if (star_val >= fThreshhold)
+        star_val = pow((star_val - fThreshhold) / (1.0 - fThreshhold), 6.0);
     else
-        StarVal = 0.0;
-    return StarVal;
+        star_val = 0.0;
+    return star_val;
 }
 
 float StableStarField(float2 vSamplePos, float fThreshhold) {
@@ -27,11 +27,11 @@ float StableStarField(float2 vSamplePos, float fThreshhold) {
     float v3 = NoisyStarField(floorSample + float2(1.0, 0.0), fThreshhold);
     float v4 = NoisyStarField(floorSample + float2(1.0, 1.0), fThreshhold);
 
-    float StarVal = v1 * (1.0 - fractX) * (1.0 - fractY) +
+    float star_val = v1 * (1.0 - fractX) * (1.0 - fractY) +
                     v2 * (1.0 - fractX) * fractY +
                     v3 * fractX * (1.0 - fractY) +
                     v4 * fractX * fractY;
-    return StarVal;
+    return star_val;
 }
 
 void mainImage(out float4 fragColor, float2 fragCoord) {
@@ -49,20 +49,19 @@ void mainImage(out float4 fragColor, float2 fragCoord) {
     float xRate = 0.2;
     float yRate = -0.06;
     float2 vSamplePos = fragCoord + float2(xRate * 1.0, yRate * 1.0);
-    float StarVal = StableStarField(vSamplePos, StarFieldThreshhold);
-    vColor += float3(StarVal);
+    float star_val = StableStarField(vSamplePos, StarFieldThreshhold);
+    vColor += float3(star_val);
 
     fragColor = float4(vColor, 1.0);
 }
 
 [numthreads(16, 16, 1)]
-void computeMain(uint3 dispatchID : SV_DispatchThreadID) {
+void main(uint3 dispatchID : SV_DispatchThreadID) {
     int2 texelCoord = int2(dispatchID.xy);
     int2 size;
     image.GetDimensions(size.x, size.y);
 
-    if (texelCoord.x < size.x && texelCoord.y < size.y)
-    {
+    if (texelCoord.x < size.x && texelCoord.y < size.y) {
         float4 color;
         mainImage(color, float2(texelCoord));
 

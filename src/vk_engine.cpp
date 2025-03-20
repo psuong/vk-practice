@@ -338,28 +338,27 @@ void VulkanEngine::init_background_pipelines() {
                                     &this->_gradientPipelineLayout));
 
     // TODO: Load the sky shader module
-    VkShaderModule gradientDrawShader;
-
+    VkShaderModule gradientShader;
     char buffer[MAX_PATH];
     if (!vkutil::load_shader_module(
             utils::get_shader_path(buffer, MAX_PATH,
                                    "shaders\\gradient_color.spv"),
-            this->_device, &gradientDrawShader)) {
+            this->_device, &gradientShader)) {
         fmt::println("[ERROR] Cannot build the gradient compute shader");
     }
 
+    VkShaderModule skyShader;
     if (!vkutil::load_shader_module(
-            utils::get_shader_path(buffer, MAX_PATH,
-                                   "shaders\\gradient_color.spv"),
-            this->_device, &gradientDrawShader)) {
-        fmt::println("[ERROR] Cannot build the compute shader");
+            utils::get_shader_path(buffer, MAX_PATH, "shaders\\sky.spv"),
+            this->_device, &skyShader)) {
+        fmt::println("[ERROR] Cannot build the sky compute shader");
     }
 
     VkPipelineShaderStageCreateInfo stageInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
         .pNext = nullptr,
         .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-        .module = gradientDrawShader,
+        .module = gradientShader,
         .pName = "main"};
 
     VkComputePipelineCreateInfo computePipelineCreateInfo{
@@ -368,16 +367,44 @@ void VulkanEngine::init_background_pipelines() {
         .stage = stageInfo,
         .layout = this->_gradientPipelineLayout,
     };
+
+    ComputeEffect gradient{
+        .name = "gradient",
+        .layout = this->_gradientPipelineLayout,
+        .data =
+            {
+                // Default colors
+                .data1 = glm::vec4(1, 0, 0, 1),
+                .data2 = glm::vec4(0, 0, 1, 1),
+            },
+    };
+
     VK_CHECK(vkCreateComputePipelines(this->_device, VK_NULL_HANDLE, 1,
                                       &computePipelineCreateInfo, nullptr,
-                                      &this->_gradientPipeline));
+                                      &gradient.pipeline));
+
+    computePipelineCreateInfo.stage.module = skyShader;
+
+    ComputeEffect sky{.name = "sky",
+                      .layout = this->_gradientPipelineLayout,
+                      .data = {.data1 = glm::vec4(0.1, 0.2, 0.4, 0.97)}};
+
+    VK_CHECK(vkCreateComputePipelines(this->_device, VK_NULL_HANDLE, 1,
+                                      &computePipelineCreateInfo, nullptr,
+                                      &sky.pipeline));
+
+    this->backgroundEffects.push_back(gradient);
+    this->backgroundEffects.push_back(sky);
 
     // Clean up the compute pipeline
-    vkDestroyShaderModule(this->_device, gradientDrawShader, nullptr);
+    vkDestroyShaderModule(this->_device, gradientShader, nullptr);
+    vkDestroyShaderModule(this->_device, skyShader, nullptr);
     this->_mainDeletionQueue.push_function([&]() {
         vkDestroyPipelineLayout(this->_device, this->_gradientPipelineLayout,
                                 nullptr);
-        vkDestroyPipeline(this->_device, this->_gradientPipeline, nullptr);
+        // vkDestroyPipeline(this->_device, this->_gradientPipeline, nullptr);
+        vkDestroyPipeline(this->_device, sky.pipeline, nullptr);
+        vkDestroyPipeline(this->_device, gradient.pipeline, nullptr);
     });
 }
 
@@ -645,20 +672,19 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd) {
     vkCmdClearColorImage(cmd, this->_drawImage.image, VK_IMAGE_LAYOUT_GENERAL,
                          &clearValue, 1, &clearRange);
 
+    ComputeEffect& effect = this->backgroundEffects[this->currentBackgroundEffect];
+
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
-                      this->_gradientPipeline);
+                      effect.pipeline);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                             this->_gradientPipelineLayout, 0, 1,
                             &this->_drawImageDescriptors, 0, nullptr);
-    // Set up the push constants
-    ComputePushConstants pc{.data1 = glm::vec4(1, 0, 0, 1),
-                            .data2 = glm::vec4(0, 0, 1, 1)};
 
     vkCmdPushConstants(cmd, this->_gradientPipelineLayout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                       sizeof(ComputePushConstants), &pc);
+                       sizeof(ComputePushConstants), &effect.data);
 
-	// Execute the compute pipeline dispatch. We are using 16x16 
+    // Execute the compute pipeline dispatch. We are using 16x16
     // workgroup size so we need to divide by it
     vkCmdDispatch(cmd, std::ceil(this->_drawExtent.width / 16.0),
                   std::ceil(this->_drawExtent.height / 16.0), 1);
@@ -700,7 +726,20 @@ void VulkanEngine::run() {
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::ShowDemoWindow();
+        // ImGui::ShowDemoWindow();
+        if (ImGui::Begin("background")) {
+            ComputeEffect &selected =
+                this->backgroundEffects[this->currentBackgroundEffect];
+            ImGui::Text("Selected effect: ", selected.name);
+            ImGui::SliderInt("Effect Index", &this->currentBackgroundEffect, 0,
+                             this->backgroundEffects.size() - 1);
+
+            ImGui::InputFloat4("data1", (float *)&selected.data.data1);
+            ImGui::InputFloat4("data2", (float *)&selected.data.data2);
+            ImGui::InputFloat4("data3", (float *)&selected.data.data3);
+            ImGui::InputFloat4("data4", (float *)&selected.data.data4);
+        }
+        ImGui::End();
 
         ImGui::Render();
 
