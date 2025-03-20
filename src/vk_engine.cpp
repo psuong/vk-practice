@@ -308,6 +308,27 @@ void VulkanEngine::init_descriptors() {
 void VulkanEngine::init_pipelines() {
     this->init_background_pipelines();
 
+    // TODO: This might be duplicated
+    // VkPushConstantRange pushConstants{
+    //     .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+    //     .offset = 0,
+    //     .size = sizeof(ComputePushConstants),
+    // };
+
+    // VkPipelineLayoutCreateInfo computeLayout{
+    //     .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+    //     .pNext = nullptr,
+    //     .setLayoutCount = 1,
+    //     .pSetLayouts = &this->_drawImageDescriptorLayout,
+    //     .pushConstantRangeCount = 1,
+    //     .pPushConstantRanges = &pushConstants,
+    // };
+    // VK_CHECK(vkCreatePipelineLayout(this->_device, &computeLayout, nullptr,
+    //                                 &this->_gradientPipelineLayout));
+}
+
+void VulkanEngine::init_background_pipelines() {
+    // TODO: Seems duplicate, need to figure out what im doing with the compute layouts...
     VkPushConstantRange pushConstants{
         .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
         .offset = 0,
@@ -322,18 +343,6 @@ void VulkanEngine::init_pipelines() {
         .pushConstantRangeCount = 1,
         .pPushConstantRanges = &pushConstants,
     };
-    VK_CHECK(vkCreatePipelineLayout(this->_device, &computeLayout, nullptr,
-                                    &this->_gradientPipelineLayout));
-}
-
-void VulkanEngine::init_background_pipelines() {
-    VkPipelineLayoutCreateInfo computeLayout{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .pNext = nullptr,
-        .setLayoutCount = 1,
-        .pSetLayouts = &this->_drawImageDescriptorLayout,
-    };
-
     VK_CHECK(vkCreatePipelineLayout(this->_device, &computeLayout, nullptr,
                                     &this->_gradientPipelineLayout));
 

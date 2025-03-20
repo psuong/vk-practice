@@ -29,6 +29,6 @@ if ($type -eq "glsl") {
         $target = ".\bin\shaders\$name"
 
         Write-Host "Compiling $shader"
-        slangc $shader -target spirv -o $target
+        slangc $shader -target spirv -profile cs_6_0 -o $target
     }
 }
