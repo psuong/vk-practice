@@ -29,49 +29,49 @@ struct ComputePushConstants {
 };
 
 struct ComputeEffect {
-    const char* name;
+    const char *name;
     VkPipeline pipeline;
     VkPipelineLayout layout;
     ComputePushConstants data;
 };
 
 struct FrameData {
-	VkCommandPool _commandPool;
-	VkCommandBuffer _mainCommandBuffer;
+    VkCommandPool _commandPool;
+    VkCommandBuffer _mainCommandBuffer;
 
-	// The swapchain semaphore is used for that render commands wait on the swapchain image request.
-	VkSemaphore _swapchainSemaphore;
+    // The swapchain semaphore is used for that render commands wait on the
+    // swapchain image request.
+    VkSemaphore _swapchainSemaphore;
 
-	// The renderSemaphore controls presenting the image to the OS once the drawing finishes
-	VkSemaphore _renderSemaphore;
-	VkFence _renderFence;
+    // The renderSemaphore controls presenting the image to the OS once the
+    // drawing finishes
+    VkSemaphore _renderSemaphore;
+    VkFence _renderFence;
 
     DeletionQueue _deletionQueue;
 };
 
-class VulkanEngine
-{
-public:
+class VulkanEngine {
+  public:
+    bool _isInitialized{false};
+    int _frameNumber{0};
+    bool stop_rendering{false};
+    VkExtent2D _windowExtent{1600, 900};
 
-	bool _isInitialized{false};
-	int _frameNumber{0};
-	bool stop_rendering{false};
-	VkExtent2D _windowExtent{1600, 900};
+    // Forward declaration without having to include the SDL header
+    struct SDL_Window *_window{nullptr};
 
-	// Forward declaration without having to include the SDL header
-	struct SDL_Window *_window{nullptr};
+    FrameData _frames[FRAME_OVERLAP];
 
-	FrameData _frames[FRAME_OVERLAP];
+    VkQueue _graphicsQueue;
+    uint32_t _graphicsQueueFamily;
 
-	VkQueue _graphicsQueue;
-	uint32_t _graphicsQueueFamily;
+    static VulkanEngine &Get();
 
-	static VulkanEngine &Get();
+    DescriptorAllocator globalDescriptorAllocator;
 
-	DescriptorAllocator globalDescriptorAllocator;
-
-	VkDescriptorSet _drawImageDescriptors;
-	VkDescriptorSetLayout _drawImageDescriptorLayout;
+    VkDescriptorSet _drawImageDescriptors;
+    VkDescriptorSetLayout _drawImageDescriptorLayout;
 
     // VkPipeline _gradientPipeline;
     VkPipelineLayout _gradientPipelineLayout;
@@ -81,35 +81,38 @@ public:
     VkCommandBuffer _immCommandBuffer;
     VkCommandPool _immCommandPool;
 
-	// initializes everything in the engine
-	void init();
+    // initializes everything in the engine
+    void init();
 
-	// shuts down the engine
-	void cleanup();
+    // shuts down the engine
+    void cleanup();
 
-	// draw loop
-	void draw();
-    
+    // draw loop
+    void draw();
+
     // draw our ui
     void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 
-	// run main loop
-	void run();
+    // run main loop
+    void run();
 
-	FrameData& get_current_frame() { return _frames[_frameNumber % FRAME_OVERLAP]; };
-private:
-	VkInstance _instance;					    // Vulkan library handle
-	VkDebugUtilsMessengerEXT _debugMessenger;   // Vulkan debug output handle
-	VkPhysicalDevice _chosenGPU;			    // GPU chosen as the default device
-	VkDevice _device;						    // Vulkan device for commands
-	VkSurfaceKHR _surface;					    // Vulkan window surface
+    FrameData &get_current_frame() {
+        return _frames[_frameNumber % FRAME_OVERLAP];
+    };
 
-	VkSwapchainKHR _swapchain;
-	VkFormat _swapchainImageFormat;
+  private:
+    VkInstance _instance;                     // Vulkan library handle
+    VkDebugUtilsMessengerEXT _debugMessenger; // Vulkan debug output handle
+    VkPhysicalDevice _chosenGPU; // GPU chosen as the default device
+    VkDevice _device;            // Vulkan device for commands
+    VkSurfaceKHR _surface;       // Vulkan window surface
 
-	std::vector<VkImage> _swapchainImages;
-	std::vector<VkImageView> _swapchainImageViews;
-	VkExtent2D _swapchainExtent;
+    VkSwapchainKHR _swapchain;
+    VkFormat _swapchainImageFormat;
+
+    std::vector<VkImage> _swapchainImages;
+    std::vector<VkImageView> _swapchainImageViews;
+    VkExtent2D _swapchainExtent;
 
     DeletionQueue _mainDeletionQueue;
     VmaAllocator _allocator;
@@ -119,18 +122,18 @@ private:
     std::vector<ComputeEffect> backgroundEffects;
     int currentBackgroundEffect{0};
 
-	void init_vulkan();
-	void init_swapchain();
-	void init_commands();
-	void init_sync_structures();
+    void init_vulkan();
+    void init_swapchain();
+    void init_commands();
+    void init_sync_structures();
     void init_descriptors();
-	void create_swapchain(uint32_t width, uint32_t height);
-	void destroy_swapchain();
+    void create_swapchain(uint32_t width, uint32_t height);
+    void destroy_swapchain();
 
     void init_pipelines();
     void init_background_pipelines();
 
-    void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
+    void immediate_submit(std::function<void(VkCommandBuffer cmd)> &&function);
     void init_imgui();
 
     void draw_background(VkCommandBuffer cmd);
