@@ -307,6 +307,7 @@ void VulkanEngine::init_descriptors() {
 
 void VulkanEngine::init_pipelines() {
     this->init_background_pipelines();
+    this->init_triangle_pipeline();
 
     // TODO: This might be duplicated
     // VkPushConstantRange pushConstants{
@@ -327,8 +328,55 @@ void VulkanEngine::init_pipelines() {
     //                                 &this->_gradientPipelineLayout));
 }
 
+void VulkanEngine::init_triangle_pipeline() {
+    VkShaderModule triangleFragShader;
+    char buffer[MAX_PATH];
+    if (!vkutil::load_shader_module(
+            utils::get_shader_path(buffer, MAX_PATH,
+                                   "shaders/colored_triangle.frag.spv"),
+            this->_device, &triangleFragShader)) {
+        fmt::print("Error when building the triangle fragment shader module");
+    } else {
+        fmt::print("Triangle fragment shader successfully loaded");
+    }
+
+    VkShaderModule triangleVertexShader;
+    if (!vkutil::load_shader_module("../../shaders/colored_triangle.vert.spv",
+                                    this->_device, &triangleVertexShader)) {
+        fmt::print("Error when building the triangle vertex shader module");
+    } else {
+        fmt::print("Triangle vertex shader successfully loaded");
+    }
+
+    VkPipelineLayoutCreateInfo pipeline_layout_info = vkinit::pipeline_layout_create_info();
+	VK_CHECK(vkCreatePipelineLayout(_device, &pipeline_layout_info, nullptr, &_trianglePipelineLayout));
+
+    vkutil::PipelineBuilder pipelineBuilder;
+    pipelineBuilder._pipelineLayout = this->_trianglePipelineLayout;
+    this->_trianglePipeline = pipelineBuilder
+        .set_shaders(triangleVertexShader, triangleFragShader)
+        .set_input_toplogy(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+        .set_polygon_mode(VK_POLYGON_MODE_FILL)
+        .set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
+        .set_multisampling_none()
+        .disable_blending()
+        .disable_depthtest()
+        .set_color_attachment_format(this->_drawImage.imageFormat)
+        .set_depth_format(VK_FORMAT_UNDEFINED)
+        .build_pipeline(this->_device);
+
+    vkDestroyShaderModule(this->_device, triangleFragShader, nullptr);
+    vkDestroyShaderModule(this->_device, triangleVertexShader, nullptr);
+
+    this->_mainDeletionQueue.push_function([&]() {
+        vkDestroyPipelineLayout(this->_device, this->_trianglePipelineLayout, nullptr);
+        vkDestroyPipeline(this->_device, this->_trianglePipeline, nullptr);
+    });
+}
+
 void VulkanEngine::init_background_pipelines() {
-    // TODO: Seems duplicate, need to figure out what im doing with the compute layouts...
+    // TODO: Seems duplicate, need to figure out what im doing with the compute
+    // layouts...
     VkPushConstantRange pushConstants{
         .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
         .offset = 0,
@@ -681,10 +729,10 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd) {
     vkCmdClearColorImage(cmd, this->_drawImage.image, VK_IMAGE_LAYOUT_GENERAL,
                          &clearValue, 1, &clearRange);
 
-    ComputeEffect& effect = this->backgroundEffects[this->currentBackgroundEffect];
+    ComputeEffect &effect =
+        this->backgroundEffects[this->currentBackgroundEffect];
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
-                      effect.pipeline);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                             this->_gradientPipelineLayout, 0, 1,
                             &this->_drawImageDescriptors, 0, nullptr);

@@ -55,6 +55,7 @@ void mainImage(out float4 fragColor, float2 fragCoord) {
     fragColor = float4(vColor, 1.0);
 }
 
+[shader("compute")]
 [numthreads(16, 16, 1)]
 void main(uint3 dispatchID : SV_DispatchThreadID) {
     int2 texelCoord = int2(dispatchID.xy);

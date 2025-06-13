@@ -1,6 +1,7 @@
 [[vk::binding(0, 0)]]
 RWTexture2D<float4> image : register(u0);
 
+[shader("compute")]
 [numthreads(16, 16, 1)]
 void main(uint3 globalID : SV_DispatchThreadID, uint3 localID : SV_GroupThreadID) {
     int2 texelCoord = int2(globalID.xy);

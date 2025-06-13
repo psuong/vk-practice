@@ -132,11 +132,73 @@ VkPipeline vkutil::PipelineBuilder::build_pipeline(VkDevice device) {
     }
 }
 
-void vkutil::PipelineBuilder::set_shaders(VkShaderModule vertexShader,
+vkutil::PipelineBuilder& vkutil::PipelineBuilder::set_shaders(VkShaderModule vertexShader,
                                           VkShaderModule fragmentShader) {
     this->_shaderStages.clear();
     this->_shaderStages.push_back(vkinit::pipeline_shader_stage_create_info(
         VK_SHADER_STAGE_VERTEX_BIT, vertexShader));
     this->_shaderStages.push_back(vkinit::pipeline_shader_stage_create_info(
         VK_SHADER_STAGE_FRAGMENT_BIT, fragmentShader));
+    return *this;
 };
+
+vkutil::PipelineBuilder& vkutil::PipelineBuilder::set_input_toplogy(VkPrimitiveTopology topology) {
+    this->_inputAssembly.topology = topology;
+    this->_inputAssembly.primitiveRestartEnable = VK_FALSE;
+    return *this;
+}
+
+vkutil::PipelineBuilder& vkutil::PipelineBuilder::set_polygon_mode(VkPolygonMode mode) {
+    this->_rasterizer.polygonMode = mode;
+    this->_rasterizer.lineWidth = 1.0f;
+    return *this;
+}
+
+vkutil::PipelineBuilder& vkutil::PipelineBuilder::set_cull_mode(VkCullModeFlags cullMode,
+                                            VkFrontFace frontFace) {
+    this->_rasterizer.cullMode = cullMode;
+    this->_rasterizer.frontFace = frontFace;
+    return *this;
+}
+
+vkutil::PipelineBuilder& vkutil::PipelineBuilder::set_multisampling_none() {
+    this->_multisampling.sampleShadingEnable = VK_FALSE;
+    this->_multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    this->_multisampling.minSampleShading = 1.0f;
+    this->_multisampling.pSampleMask = nullptr;
+    this->_multisampling.alphaToCoverageEnable = VK_FALSE;
+    this->_multisampling.alphaToOneEnable = VK_FALSE;
+    return *this;
+}
+
+vkutil::PipelineBuilder& vkutil::PipelineBuilder::disable_blending() {
+    this->_colorBlendAttachment.colorWriteMask =
+        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT;
+    this->_colorBlendAttachment.blendEnable = VK_FALSE;
+    return *this;
+}
+
+vkutil::PipelineBuilder& vkutil::PipelineBuilder::set_color_attachment_format(VkFormat format) {
+    this->_colorAttachmentFormat = format;
+    this->_renderInfo.colorAttachmentCount = 1;
+    this->_renderInfo.pColorAttachmentFormats = &this->_colorAttachmentFormat;
+    return *this;
+}
+
+vkutil::PipelineBuilder& vkutil::PipelineBuilder::set_depth_format(VkFormat format) {
+    this->_renderInfo.depthAttachmentFormat = format;
+    return *this;
+}
+
+vkutil::PipelineBuilder& vkutil::PipelineBuilder::disable_depthtest() {
+    this->_depthStencil.depthTestEnable = VK_FALSE;
+    this->_depthStencil.depthWriteEnable = VK_FALSE;
+    this->_depthStencil.depthCompareOp = VK_COMPARE_OP_NEVER;
+    this->_depthStencil.depthBoundsTestEnable = VK_FALSE;
+    this->_depthStencil.stencilTestEnable = VK_FALSE;
+    this->_depthStencil.front = {};
+    this->_depthStencil.back = {};
+    this->_depthStencil.minDepthBounds = 0.0f;
+    this->_depthStencil.maxDepthBounds = 1.0f;
+    return *this;
+}
