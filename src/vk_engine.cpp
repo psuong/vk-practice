@@ -61,6 +61,13 @@ void VulkanEngine::init() {
 void VulkanEngine::init_vulkan() {
     vkb::InstanceBuilder builder;
 
+    // VkDebugUtilsObjectNameInfoEXT nameInfo{
+    //     .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+    //     .objectType = VK_OBJECT_TYPE_PIPELINE,
+    //     .objectHandle = reinterpret_cast<uint64_t>(pipeline),
+    //     .pObjectName =
+    // };
+
     // Use the debugger
     auto inst = builder.set_app_name("Vk Renderer")
                     .request_validation_layers(true)
@@ -317,7 +324,7 @@ void VulkanEngine::init_triangle_pipeline() {
                                   .disable_depthtest()
                                   .set_color_attachment_format(this->_drawImage.imageFormat)
                                   .set_depth_format(VK_FORMAT_UNDEFINED)
-                                  .build_pipeline(this->_device);
+                                  .build_pipeline(this->_device, "triangle_pipeline");
 
     vkDestroyShaderModule(this->_device, triangleFragShader, nullptr);
     vkDestroyShaderModule(this->_device, triangleVertexShader, nullptr);
@@ -385,16 +392,20 @@ void VulkanEngine::init_background_pipelines() {
             },
     };
 
-    VK_CHECK(vkCreateComputePipelines(this->_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr,
-                                      &gradient.pipeline));
+    if (vkCreateComputePipelines(this->_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr,
+                                 &gradient.pipeline) == VK_SUCCESS) {
+        utils::set_pipeline_debug_name(this->_device, (uint64_t)gradient.pipeline, VK_OBJECT_TYPE_PIPELINE, "gradient");
+    }
 
     computePipelineCreateInfo.stage.module = skyShader;
 
     ComputeEffect sky{
         .name = "sky", .layout = this->_gradientPipelineLayout, .data = {.data1 = glm::vec4(0.1, 0.2, 0.4, 0.97)}};
 
-    VK_CHECK(
-        vkCreateComputePipelines(this->_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &sky.pipeline));
+    if (vkCreateComputePipelines(this->_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr,
+                                 &sky.pipeline) == VK_SUCCESS) {
+        utils::set_pipeline_debug_name(this->_device, (uint64_t)sky.pipeline, VK_OBJECT_TYPE_PIPELINE, "sky");
+    }
 
     this->backgroundEffects.push_back(gradient);
     this->backgroundEffects.push_back(sky);
@@ -403,10 +414,9 @@ void VulkanEngine::init_background_pipelines() {
     vkDestroyShaderModule(this->_device, gradientShader, nullptr);
     vkDestroyShaderModule(this->_device, skyShader, nullptr);
     this->_mainDeletionQueue.push_function([&]() {
-        vkDestroyPipelineLayout(this->_device, this->_gradientPipelineLayout, nullptr);
-        // vkDestroyPipeline(this->_device, this->_gradientPipeline, nullptr);
         vkDestroyPipeline(this->_device, sky.pipeline, nullptr);
         vkDestroyPipeline(this->_device, gradient.pipeline, nullptr);
+        vkDestroyPipelineLayout(this->_device, this->_gradientPipelineLayout, nullptr);
     });
 }
 
@@ -503,6 +513,8 @@ void VulkanEngine::cleanup() {
             vkDestroyFence(this->_device, frameData._renderFence, nullptr);
             vkDestroySemaphore(this->_device, frameData._renderSemaphore, nullptr);
             vkDestroySemaphore(this->_device, frameData._swapchainSemaphore, nullptr);
+
+            frameData._deletionQueue.flush();
         }
         this->_mainDeletionQueue.flush();
 

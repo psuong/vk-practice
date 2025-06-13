@@ -26,7 +26,7 @@ class PipelineBuilder {
 
     void clear();
 
-    VkPipeline build_pipeline(VkDevice device);
+    VkPipeline build_pipeline(VkDevice device, const char* pipelineName);
     PipelineBuilder &set_shaders(VkShaderModule vertexShader, VkShaderModule fragmentShader);
     PipelineBuilder &set_input_toplogy(VkPrimitiveTopology topology);
     PipelineBuilder &set_polygon_mode(VkPolygonMode mode);

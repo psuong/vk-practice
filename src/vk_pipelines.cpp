@@ -1,4 +1,5 @@
 ﻿#include "fmt/core.h"
+#include "utils.h"
 #include <fstream>
 #include <vector>
 #include <vk_initializers.h>
@@ -66,7 +67,7 @@ void vkutil::PipelineBuilder::clear() {
     this->_shaderStages.clear();
 }
 
-VkPipeline vkutil::PipelineBuilder::build_pipeline(VkDevice device) {
+VkPipeline vkutil::PipelineBuilder::build_pipeline(VkDevice device, const char *pipelineName) {
     // make viewport state from our stored viewport and scissor
     // TODO: Support multiple viewports
     VkPipelineViewportStateCreateInfo viewportState = {
@@ -125,6 +126,7 @@ VkPipeline vkutil::PipelineBuilder::build_pipeline(VkDevice device) {
         fmt::println("Failed to create pipeline");
         return VK_NULL_HANDLE;
     } else {
+        utils::set_pipeline_debug_name(device, (uint64_t)newPipeline, VK_OBJECT_TYPE_PIPELINE, pipelineName);
         return newPipeline;
     }
 }
@@ -132,8 +134,7 @@ VkPipeline vkutil::PipelineBuilder::build_pipeline(VkDevice device) {
 vkutil::PipelineBuilder &vkutil::PipelineBuilder::set_shaders(VkShaderModule vertexShader,
                                                               VkShaderModule fragmentShader) {
     this->_shaderStages.clear();
-    this->_shaderStages.push_back(
-        vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT, vertexShader));
+    this->_shaderStages.push_back(vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT, vertexShader));
     this->_shaderStages.push_back(
         vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT, fragmentShader));
     return *this;

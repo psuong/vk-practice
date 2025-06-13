@@ -73,7 +73,6 @@ class VulkanEngine {
     VkDescriptorSet _drawImageDescriptors;
     VkDescriptorSetLayout _drawImageDescriptorLayout;
 
-    // VkPipeline _gradientPipeline;
     VkPipelineLayout _gradientPipelineLayout;
 
     // Immediate submit structures
