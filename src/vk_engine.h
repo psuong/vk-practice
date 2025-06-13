@@ -139,7 +139,7 @@ class VulkanEngine {
     void immediate_submit(std::function<void(VkCommandBuffer cmd)> &&function);
     void init_imgui();
 
-    void draw_background(VkCommandBuffer cmd);
-
     void init_triangle_pipeline();
+    void draw_background(VkCommandBuffer cmd);
+    void draw_geometry(VkCommandBuffer cmd);
 };

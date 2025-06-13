@@ -635,6 +635,8 @@ void VulkanEngine::draw() {
                              VK_IMAGE_LAYOUT_GENERAL,
                              VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
+    this->draw_geometry(cmd);
+
     // Change the swapchain back to a format that works for displays
     vkutil::transition_image(cmd, this->_swapchainImages[swapchainImageIndex],
                              VK_IMAGE_LAYOUT_UNDEFINED,
@@ -745,6 +747,9 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd) {
     // workgroup size so we need to divide by it
     vkCmdDispatch(cmd, std::ceil(this->_drawExtent.width / 16.0),
                   std::ceil(this->_drawExtent.height / 16.0), 1);
+}
+
+void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
 }
 
 void VulkanEngine::run() {
