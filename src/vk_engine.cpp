@@ -75,18 +75,27 @@ void VulkanEngine::init_vulkan() {
 
     SDL_Vulkan_CreateSurface(this->_window, this->_instance, &_surface);
 
-    VkPhysicalDeviceVulkan13Features features{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
-    features.dynamicRendering = true;
-    features.synchronization2 = true;
+    VkPhysicalDeviceVulkan11Features features1_1{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+                                                 .shaderDrawParameters = true};
 
-    VkPhysicalDeviceVulkan12Features features1_2{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
-    features1_2.bufferDeviceAddress = true;
-    features1_2.descriptorIndexing = true;
+    VkPhysicalDeviceVulkan13Features features1_3{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .synchronization2 = true,
+        .dynamicRendering = true,
+    };
+
+    VkPhysicalDeviceVulkan12Features features1_2{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .descriptorIndexing = true,
+        .bufferDeviceAddress = true,
+    };
+
     vkb::PhysicalDeviceSelector selector{vkb_inst};
 
     vkb::PhysicalDevice physicalDevice = selector.set_minimum_version(1, 3)
-                                             .set_required_features_13(features)
+                                             .set_required_features_11(features1_1)
                                              .set_required_features_12(features1_2)
+                                             .set_required_features_13(features1_3)
                                              .set_surface(this->_surface)
                                              .select()
                                              .value();
@@ -341,13 +350,13 @@ void VulkanEngine::init_background_pipelines() {
     // TODO: Load the sky shader module
     VkShaderModule gradientShader;
     char buffer[MAX_PATH];
-    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\gradient_color.spv"),
+    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\gradient_color.comp.spv"),
                                     this->_device, &gradientShader)) {
         fmt::println("[ERROR] Cannot build the gradient compute shader");
     }
 
     VkShaderModule skyShader;
-    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\sky.spv"), this->_device,
+    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\sky.comp.spv"), this->_device,
                                     &skyShader)) {
         fmt::println("[ERROR] Cannot build the sky compute shader");
     }

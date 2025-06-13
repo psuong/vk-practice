@@ -132,7 +132,8 @@ VkPipeline vkutil::PipelineBuilder::build_pipeline(VkDevice device) {
 vkutil::PipelineBuilder &vkutil::PipelineBuilder::set_shaders(VkShaderModule vertexShader,
                                                               VkShaderModule fragmentShader) {
     this->_shaderStages.clear();
-    this->_shaderStages.push_back(vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT, vertexShader));
+    this->_shaderStages.push_back(
+        vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT, vertexShader));
     this->_shaderStages.push_back(
         vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT, fragmentShader));
     return *this;
