@@ -5,8 +5,7 @@
 #include <windows.h>
 
 namespace utils {
-const char *get_shader_path(char *buffer, size_t bufferSize,
-                            const char *subdir) {
+inline const char *get_shader_path(char *buffer, size_t bufferSize, const char *subdir) {
     GetModuleFileNameA(NULL, buffer, MAX_PATH);
     char *lastSlash = strrchr(buffer, '\\');
 

@@ -103,9 +103,9 @@ class VulkanEngine {
   private:
     VkInstance _instance;                     // Vulkan library handle
     VkDebugUtilsMessengerEXT _debugMessenger; // Vulkan debug output handle
-    VkPhysicalDevice _chosenGPU; // GPU chosen as the default device
-    VkDevice _device;            // Vulkan device for commands
-    VkSurfaceKHR _surface;       // Vulkan window surface
+    VkPhysicalDevice _chosenGPU;              // GPU chosen as the default device
+    VkDevice _device;                         // Vulkan device for commands
+    VkSurfaceKHR _surface;                    // Vulkan window surface
 
     VkSwapchainKHR _swapchain;
     VkFormat _swapchainImageFormat;
