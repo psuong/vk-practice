@@ -61,13 +61,6 @@ void VulkanEngine::init() {
 void VulkanEngine::init_vulkan() {
     vkb::InstanceBuilder builder;
 
-    // VkDebugUtilsObjectNameInfoEXT nameInfo{
-    //     .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-    //     .objectType = VK_OBJECT_TYPE_PIPELINE,
-    //     .objectHandle = reinterpret_cast<uint64_t>(pipeline),
-    //     .pObjectName =
-    // };
-
     // Use the debugger
     auto inst = builder.set_app_name("Vk Renderer")
                     .request_validation_layers(true)
@@ -126,10 +119,7 @@ void VulkanEngine::init_vulkan() {
     allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
     vmaCreateAllocator(&allocatorInfo, &this->_allocator);
 
-    this->_mainDeletionQueue.push_function([&]() {
-        fmt::println("Releasing VMA");
-        vmaDestroyAllocator(this->_allocator);
-    });
+    this->_mainDeletionQueue.push_function([&]() { vmaDestroyAllocator(this->_allocator); });
 }
 
 void VulkanEngine::init_swapchain() {
@@ -331,7 +321,10 @@ void VulkanEngine::init_triangle_pipeline() {
 
     this->_mainDeletionQueue.push_function([&]() {
         vkDestroyPipelineLayout(this->_device, this->_trianglePipelineLayout, nullptr);
-        vkDestroyPipeline(this->_device, this->_trianglePipeline, nullptr);
+        if (this->_trianglePipeline != VK_NULL_HANDLE) {
+            fmt::println("Destroying triangle pipeline");
+            vkDestroyPipeline(this->_device, this->_trianglePipeline, nullptr);
+        }
     });
 }
 
@@ -404,6 +397,7 @@ void VulkanEngine::init_background_pipelines() {
 
     if (vkCreateComputePipelines(this->_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr,
                                  &sky.pipeline) == VK_SUCCESS) {
+        fmt::println("Sky pipeline created");
         utils::set_pipeline_debug_name(this->_device, (uint64_t)sky.pipeline, VK_OBJECT_TYPE_PIPELINE, "sky");
     }
 
@@ -413,10 +407,17 @@ void VulkanEngine::init_background_pipelines() {
     // Clean up the compute pipeline
     vkDestroyShaderModule(this->_device, gradientShader, nullptr);
     vkDestroyShaderModule(this->_device, skyShader, nullptr);
-    this->_mainDeletionQueue.push_function([&]() {
-        vkDestroyPipeline(this->_device, sky.pipeline, nullptr);
-        vkDestroyPipeline(this->_device, gradient.pipeline, nullptr);
+    this->_mainDeletionQueue.push_function([=, this]() {
         vkDestroyPipelineLayout(this->_device, this->_gradientPipelineLayout, nullptr);
+        if (sky.pipeline != VK_NULL_HANDLE) {
+            fmt::println("Destroying sky pipeline");
+            vkDestroyPipeline(this->_device, sky.pipeline, nullptr);
+        }
+
+        if (gradient.pipeline != VK_NULL_HANDLE) {
+            fmt::println("Destroying gradient pipeline");
+            vkDestroyPipeline(this->_device, gradient.pipeline, nullptr);
+        }
     });
 }
 
@@ -506,7 +507,7 @@ void VulkanEngine::cleanup() {
 
         // Free the command pool
         for (int i = 0; i < FRAME_OVERLAP; i++) {
-            FrameData frameData = this->_frames[i];
+            FrameData &frameData = this->_frames[i];
             vkDestroyCommandPool(this->_device, frameData._commandPool, nullptr);
 
             // Destroy the sync objects
@@ -522,6 +523,7 @@ void VulkanEngine::cleanup() {
         destroy_swapchain();
 
         vkDestroySurfaceKHR(this->_instance, this->_surface, nullptr);
+        fmt::println("Destroying device");
         vkDestroyDevice(_device, nullptr);
 
         vkb::destroy_debug_utils_messenger(this->_instance, this->_debugMessenger);

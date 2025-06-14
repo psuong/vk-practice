@@ -38,10 +38,10 @@ bool vkutil::load_shader_module(const char *filePath, VkDevice device, VkShaderM
 
     VkShaderModule shaderModule;
     if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
-        fmt::println("Failed");
+        fmt::println("Failed to load shader module from: {}", filePath);
         return false;
     }
-    fmt::println("Success");
+    fmt::println("Successfully loaded shader module from: {}", filePath);
     *outShaderModule = shaderModule;
     return true;
 }
