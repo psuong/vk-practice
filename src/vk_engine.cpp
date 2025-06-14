@@ -782,3 +782,7 @@ AllocatedBuffer VulkanEngine::create_buffer(size_t allocSize, VkBufferUsageFlags
     VK_CHECK(vmaCreateBuffer(this->_allocator, &bufferInfo, &vmaAllocInfo, &newBuffer.buffer, &newBuffer.allocation, &newBuffer.info));
     return newBuffer;
 }
+
+void VulkanEngine::destroy_buffer(const AllocatedBuffer& buffer) {
+    vmaDestroyBuffer(this->_allocator, buffer.buffer, buffer.allocation);
+}
