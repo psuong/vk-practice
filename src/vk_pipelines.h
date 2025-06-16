@@ -28,7 +28,7 @@ class PipelineBuilder {
 
     VkPipeline build_pipeline(VkDevice device, const char* pipelineName);
     PipelineBuilder& set_shaders(VkShaderModule vertexShader, VkShaderModule fragmentShader);
-    PipelineBuilder& set_input_toplogy(VkPrimitiveTopology topology);
+    PipelineBuilder& set_input_topology(VkPrimitiveTopology topology);
     PipelineBuilder& set_polygon_mode(VkPolygonMode mode);
     PipelineBuilder& set_cull_mode(VkCullModeFlags cullMode, VkFrontFace frontFace);
     PipelineBuilder& set_multisampling_none();

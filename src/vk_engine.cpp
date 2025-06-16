@@ -1,4 +1,5 @@
 ﻿//> includes
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <functional>
@@ -281,6 +282,7 @@ void VulkanEngine::init_descriptors() {
 void VulkanEngine::init_pipelines() {
     this->init_background_pipelines();
     this->init_triangle_pipeline();
+    this->init_mesh_pipeline();
 }
 
 void VulkanEngine::init_triangle_pipeline() {
@@ -307,7 +309,7 @@ void VulkanEngine::init_triangle_pipeline() {
     vkutil::PipelineBuilder pipelineBuilder;
     pipelineBuilder._pipelineLayout = this->_trianglePipelineLayout;
     this->_trianglePipeline = pipelineBuilder.set_shaders(triangleVertexShader, triangleFragShader)
-                                  .set_input_toplogy(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+                                  .set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
                                   .set_polygon_mode(VK_POLYGON_MODE_FILL)
                                   .set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
                                   .set_multisampling_none()
@@ -326,6 +328,57 @@ void VulkanEngine::init_triangle_pipeline() {
             fmt::println("Destroying triangle pipeline");
             vkDestroyPipeline(this->_device, this->_trianglePipeline, nullptr);
         }
+    });
+}
+
+void VulkanEngine::init_mesh_pipeline() {
+    VkShaderModule triangleFragShader;
+    char buffer[MAX_PATH];
+    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\colored_triangle_frag.spv"),
+                                    _device, &triangleFragShader)) {
+        fmt::print("Error when building the triangle fragment shader module");
+    } else {
+        fmt::print("Triangle fragment shader succesfully loaded");
+    }
+
+    VkShaderModule triangleVertexShader;
+    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\colored_triangle_vert.spv"),
+                                    this->_device, &triangleVertexShader)) {
+        fmt::print("Error when building the triangle vertex shader module\n");
+    } else {
+        fmt::print("Triangle vertex shader successfully loaded\n");
+    }
+
+    VkPushConstantRange bufferRange{
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT, .offset = 0, .size = sizeof(GPUDrawPushConstants)};
+
+    VkPipelineLayoutCreateInfo pipeline_layout_info = vkinit::pipeline_layout_create_info();
+    pipeline_layout_info.pPushConstantRanges = &bufferRange;
+    pipeline_layout_info.pushConstantRangeCount = 1;
+
+    VK_CHECK(vkCreatePipelineLayout(_device, &pipeline_layout_info, nullptr, &_meshPipelineLayout));
+
+    vkutil::PipelineBuilder pipelineBuilder;
+    pipelineBuilder._pipelineLayout = this->_meshPipelineLayout;
+
+    this->_meshPipeline = pipelineBuilder.set_shaders(triangleVertexShader, triangleFragShader)
+                              .set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+                              .set_polygon_mode(VK_POLYGON_MODE_FILL)
+                              .set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
+                              .set_multisampling_none()
+                              .disable_blending()
+                              .disable_depthtest()
+                              .set_color_attachment_format(this->_drawImage.imageFormat)
+                              .set_depth_format(VK_FORMAT_UNDEFINED)
+                              .build_pipeline(this->_device, "mesh_pipeline");
+
+    // Destroy the shaders
+    vkDestroyShaderModule(this->_device, triangleFragShader, nullptr);
+    vkDestroyShaderModule(this->_device, triangleVertexShader, nullptr);
+
+    this->_mainDeletionQueue.push_function([&, this]() {
+        vkDestroyPipelineLayout(this->_device, this->_meshPipelineLayout, nullptr);
+        vkDestroyPipeline(this->_device, this->_meshPipeline, nullptr);
     });
 }
 
@@ -419,6 +472,36 @@ void VulkanEngine::init_background_pipelines() {
             fmt::println("Destroying gradient pipeline");
             vkDestroyPipeline(this->_device, gradient.pipeline, nullptr);
         }
+    });
+}
+
+void VulkanEngine::init_default_data() {
+    std::array<Vertex, 4> rect_vertices;
+    rect_vertices[0].position = {0.5, -0.5, 0};
+    rect_vertices[1].position = {0.5, 0.5, 0};
+    rect_vertices[2].position = {-0.5, -0.5, 0};
+    rect_vertices[3].position = {-0.5, 0.5, 0};
+
+    rect_vertices[0].color = {0, 0, 0, 1};
+    rect_vertices[1].color = {0.5, 0.5, 0.5, 1};
+    rect_vertices[2].color = {1, 0, 0, 1};
+    rect_vertices[3].color = {0, 1, 0, 1};
+
+    std::array<uint32_t, 6> rect_indices;
+
+    rect_indices[0] = 0;
+    rect_indices[1] = 1;
+    rect_indices[2] = 2;
+
+    rect_indices[3] = 2;
+    rect_indices[4] = 1;
+    rect_indices[5] = 3;
+
+    rectangle = this->upload_mesh(rect_indices, rect_vertices);
+
+    this->_mainDeletionQueue.push_function([&]() {
+        this->destroy_buffer(rectangle.indexBuffer);
+        this->destroy_buffer(rectangle.vertexBuffer);
     });
 }
 
@@ -708,6 +791,14 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     // launch a draw command to draw 3 vertices
     vkCmdDraw(cmd, 3, 1, 0, 0);
 
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, this->_meshPipeline);
+
+    GPUDrawPushConstants push_constants{.worldMatrix = glm::mat4{1.f}, .vertexBuffer = rectangle.vertexBufferAddress};
+
+    vkCmdPushConstants(cmd, this->_meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants),
+                       &push_constants);
+    vkCmdDrawIndexed(cmd, 6, 1, 0, 0, 0);
+
     vkCmdEndRendering(cmd);
 }
 
@@ -785,7 +876,7 @@ void VulkanEngine::destroy_buffer(const AllocatedBuffer& buffer) {
     vmaDestroyBuffer(this->_allocator, buffer.buffer, buffer.allocation);
 }
 
-GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices) {
+GPUMeshBuffers VulkanEngine::upload_mesh(std::span<uint32_t> indices, std::span<Vertex> vertices) {
     const size_t vertexBufferSize = vertices.size() * sizeof(Vertex);
     const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
 

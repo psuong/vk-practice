@@ -140,7 +140,7 @@ vkutil::PipelineBuilder& vkutil::PipelineBuilder::set_shaders(VkShaderModule ver
     return *this;
 };
 
-vkutil::PipelineBuilder& vkutil::PipelineBuilder::set_input_toplogy(VkPrimitiveTopology topology) {
+vkutil::PipelineBuilder& vkutil::PipelineBuilder::set_input_topology(VkPrimitiveTopology topology) {
     this->_inputAssembly.topology = topology;
     this->_inputAssembly.primitiveRestartEnable = VK_FALSE;
     return *this;
