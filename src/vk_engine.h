@@ -8,6 +8,7 @@
 #include "vk_descriptors.h"
 #include "vk_mem_alloc.h"
 #include <functional>
+#include <span>
 #include <vk_types.h>
 #include <vulkan/vulkan_core.h>
 
@@ -29,7 +30,7 @@ struct ComputePushConstants {
 };
 
 struct ComputeEffect {
-    const char *name;
+    const char* name;
     VkPipeline pipeline;
     VkPipelineLayout layout;
     ComputePushConstants data;
@@ -59,14 +60,14 @@ class VulkanEngine {
     VkExtent2D _windowExtent{1600, 900};
 
     // Forward declaration without having to include the SDL header
-    struct SDL_Window *_window{nullptr};
+    struct SDL_Window* _window{nullptr};
 
     FrameData _frames[FRAME_OVERLAP];
 
     VkQueue _graphicsQueue;
     uint32_t _graphicsQueueFamily;
 
-    static VulkanEngine &Get();
+    static VulkanEngine& Get();
 
     DescriptorAllocator globalDescriptorAllocator;
 
@@ -95,7 +96,7 @@ class VulkanEngine {
     // run main loop
     void run();
 
-    FrameData &get_current_frame() {
+    FrameData& get_current_frame() {
         return _frames[_frameNumber % FRAME_OVERLAP];
     };
 
@@ -135,7 +136,7 @@ class VulkanEngine {
     void init_pipelines();
     void init_background_pipelines();
 
-    void immediate_submit(std::function<void(VkCommandBuffer cmd)> &&function);
+    void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
     void init_imgui();
 
     void init_triangle_pipeline();
@@ -144,4 +145,6 @@ class VulkanEngine {
 
     AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
     void destroy_buffer(const AllocatedBuffer& buffer);
+
+    GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 };

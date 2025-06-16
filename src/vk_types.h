@@ -21,11 +21,11 @@
 #include <glm/vec4.hpp>
 
 template <> struct fmt::formatter<VkResult> {
-    constexpr auto parse(fmt::format_parse_context &ctx) {
+    constexpr auto parse(fmt::format_parse_context& ctx) {
         return ctx.begin();
     }
 
-    auto format(VkResult result, fmt::format_context &ctx) const {
+    auto format(VkResult result, fmt::format_context& ctx) const {
         return fmt::format_to(ctx.out(), "{}", fmt::string_view(string_VkResult(result)));
     }
 };
@@ -36,6 +36,7 @@ struct AllocatedBuffer {
     VmaAllocationInfo info;
 };
 
+// Somewhere we need to interweave for a better GPU format? Is there a way I can inspect this?
 struct Vertex {
     glm::vec3 position;
     float uv_x;

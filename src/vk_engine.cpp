@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <span>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 #define VMA_IMPLEMENTATION
@@ -26,9 +27,9 @@
 #include "VkBootstrap.h"
 #include "vk_images.h"
 
-VulkanEngine *loadedEngine = nullptr;
+VulkanEngine* loadedEngine = nullptr;
 
-VulkanEngine &VulkanEngine::Get() {
+VulkanEngine& VulkanEngine::Get() {
     return *loadedEngine;
 }
 
@@ -226,7 +227,7 @@ void VulkanEngine::init_sync_structures() {
     VkSemaphoreCreateInfo semaphoreCreateInfo = vkinit::semaphore_create_info();
 
     for (int i = 0; i < FRAME_OVERLAP; i++) {
-        FrameData &frameData = this->_frames[i];
+        FrameData& frameData = this->_frames[i];
         VK_CHECK(vkCreateFence(this->_device, &fenceCreateInfo, nullptr, &frameData._renderFence));
 
         VK_CHECK(vkCreateSemaphore(this->_device, &semaphoreCreateInfo, nullptr, &frameData._swapchainSemaphore));
@@ -421,7 +422,7 @@ void VulkanEngine::init_background_pipelines() {
     });
 }
 
-void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)> &&function) {
+void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
     VK_CHECK(vkResetFences(this->_device, 1, &this->_immFence));
     VK_CHECK(vkResetCommandBuffer(this->_immCommandBuffer, 0));
 
@@ -507,7 +508,7 @@ void VulkanEngine::cleanup() {
 
         // Free the command pool
         for (int i = 0; i < FRAME_OVERLAP; i++) {
-            FrameData &frameData = this->_frames[i];
+            FrameData& frameData = this->_frames[i];
             vkDestroyCommandPool(this->_device, frameData._commandPool, nullptr);
 
             // Destroy the sync objects
@@ -536,7 +537,7 @@ void VulkanEngine::cleanup() {
 }
 
 void VulkanEngine::draw() {
-    FrameData &frameData = get_current_frame();
+    FrameData& frameData = get_current_frame();
     VkDevice device = this->_device;
 
     // Wait until the GPU finished rendering the last frame, with a timeout of 1
@@ -665,7 +666,7 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd) {
     VkImageSubresourceRange clearRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
     vkCmdClearColorImage(cmd, this->_drawImage.image, VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &clearRange);
 
-    ComputeEffect &effect = this->backgroundEffects[this->currentBackgroundEffect];
+    ComputeEffect& effect = this->backgroundEffects[this->currentBackgroundEffect];
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, this->_gradientPipelineLayout, 0, 1,
@@ -748,14 +749,14 @@ void VulkanEngine::run() {
 
         // ImGui::ShowDemoWindow();
         if (ImGui::Begin("background")) {
-            ComputeEffect &selected = this->backgroundEffects[this->currentBackgroundEffect];
+            ComputeEffect& selected = this->backgroundEffects[this->currentBackgroundEffect];
             ImGui::Text("Selected effect: ", selected.name);
             ImGui::SliderInt("Effect Index", &this->currentBackgroundEffect, 0, this->backgroundEffects.size() - 1);
 
-            ImGui::InputFloat4("data1", (float *)&selected.data.data1);
-            ImGui::InputFloat4("data2", (float *)&selected.data.data2);
-            ImGui::InputFloat4("data3", (float *)&selected.data.data3);
-            ImGui::InputFloat4("data4", (float *)&selected.data.data4);
+            ImGui::InputFloat4("data1", (float*)&selected.data.data1);
+            ImGui::InputFloat4("data2", (float*)&selected.data.data2);
+            ImGui::InputFloat4("data3", (float*)&selected.data.data3);
+            ImGui::InputFloat4("data4", (float*)&selected.data.data4);
         }
         ImGui::End();
 
@@ -766,12 +767,8 @@ void VulkanEngine::run() {
 }
 
 AllocatedBuffer VulkanEngine::create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) {
-    VkBufferCreateInfo bufferInfo = { 
-        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .pNext = nullptr,
-        .size = allocSize,
-        .usage = usage
-    };
+    VkBufferCreateInfo bufferInfo = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .pNext = nullptr, .size = allocSize, .usage = usage};
 
     VmaAllocationCreateInfo vmaAllocInfo = {
         .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT,
@@ -779,10 +776,51 @@ AllocatedBuffer VulkanEngine::create_buffer(size_t allocSize, VkBufferUsageFlags
     };
 
     AllocatedBuffer newBuffer;
-    VK_CHECK(vmaCreateBuffer(this->_allocator, &bufferInfo, &vmaAllocInfo, &newBuffer.buffer, &newBuffer.allocation, &newBuffer.info));
+    VK_CHECK(vmaCreateBuffer(this->_allocator, &bufferInfo, &vmaAllocInfo, &newBuffer.buffer, &newBuffer.allocation,
+                             &newBuffer.info));
     return newBuffer;
 }
 
 void VulkanEngine::destroy_buffer(const AllocatedBuffer& buffer) {
     vmaDestroyBuffer(this->_allocator, buffer.buffer, buffer.allocation);
+}
+
+GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices) {
+    const size_t vertexBufferSize = vertices.size() * sizeof(Vertex);
+    const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
+
+    GPUMeshBuffers newSurface;
+
+    newSurface.vertexBuffer =
+        create_buffer(vertexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+
+    VkBufferDeviceAddressInfo deviceAddressInfo{
+        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+    };
+
+    newSurface.vertexBufferAddress = vkGetBufferDeviceAddress(this->_device, &deviceAddressInfo);
+    newSurface.indexBuffer =
+        create_buffer(indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+
+    AllocatedBuffer staging =
+        create_buffer(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+
+    void* data = staging.allocation->GetMappedData();
+    memcpy(data, vertices.data(), vertexBufferSize);
+    memcpy((char*)data + vertexBufferSize, indices.data(), indexBufferSize);
+
+    immediate_submit([&](VkCommandBuffer cmd) {
+        VkBufferCopy vertexCopy{
+            .srcOffset = 0,
+            .dstOffset = 0,
+            .size = vertexBufferSize,
+        };
+        vkCmdCopyBuffer(cmd, staging.buffer, newSurface.vertexBuffer.buffer, 1, &vertexCopy);
+
+        VkBufferCopy indexCopy{.srcOffset = vertexBufferSize, .dstOffset = 0, .size = indexBufferSize};
+        vkCmdCopyBuffer(cmd, staging.buffer, newSurface.indexBuffer.buffer, 1, &indexCopy);
+    });
+
+    this->destroy_buffer(staging);
+    return newSurface;
 }

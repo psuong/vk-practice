@@ -4,7 +4,7 @@
 #include <vk_descriptors.h>
 #include <vulkan/vulkan_core.h>
 
-DescriptorLayoutBuilder &DescriptorLayoutBuilder::add_bindings(uint32_t binding, VkDescriptorType type) {
+DescriptorLayoutBuilder& DescriptorLayoutBuilder::add_bindings(uint32_t binding, VkDescriptorType type) {
     VkDescriptorSetLayoutBinding newBinding{};
     newBinding.binding = binding;
     newBinding.descriptorCount = 1;
@@ -18,10 +18,10 @@ void DescriptorLayoutBuilder::clear() {
     this->bindings.clear();
 }
 
-VkDescriptorSetLayout DescriptorLayoutBuilder::build(VkDevice device, VkShaderStageFlags shaderStages, void *pNext,
+VkDescriptorSetLayout DescriptorLayoutBuilder::build(VkDevice device, VkShaderStageFlags shaderStages, void* pNext,
                                                      VkDescriptorSetLayoutCreateFlags flags) {
 
-    for (auto &b : bindings) {
+    for (auto& b : bindings) {
         b.stageFlags |= shaderStages;
     }
 
