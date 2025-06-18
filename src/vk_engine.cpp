@@ -47,14 +47,15 @@ void VulkanEngine::init() {
     _window = SDL_CreateWindow("Vulkan Engine", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, _windowExtent.width,
                                _windowExtent.height, window_flags);
 
-    init_vulkan();
-    init_swapchain();
-    init_commands();
-    init_sync_structures();
-    init_descriptors();
+    this->init_vulkan();
+    this->init_swapchain();
+    this->init_commands();
+    this->init_sync_structures();
+    this->init_descriptors();
 
-    init_pipelines();
-    init_imgui();
+    this->init_pipelines();
+    this->init_imgui();
+    this->init_default_data();
 
     // everything went fine
     _isInitialized = true;
@@ -77,14 +78,10 @@ void VulkanEngine::init_vulkan() {
 
     SDL_Vulkan_CreateSurface(this->_window, this->_instance, &_surface);
 
+    VkPhysicalDeviceFeatures features1_0{.shaderInt64 = VK_TRUE};
+
     VkPhysicalDeviceVulkan11Features features1_1{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
                                                  .shaderDrawParameters = true};
-
-    VkPhysicalDeviceVulkan13Features features1_3{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-        .synchronization2 = true,
-        .dynamicRendering = true,
-    };
 
     VkPhysicalDeviceVulkan12Features features1_2{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
@@ -92,9 +89,16 @@ void VulkanEngine::init_vulkan() {
         .bufferDeviceAddress = true,
     };
 
+    VkPhysicalDeviceVulkan13Features features1_3{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .synchronization2 = true,
+        .dynamicRendering = true,
+    };
+
     vkb::PhysicalDeviceSelector selector{vkb_inst};
 
     vkb::PhysicalDevice physicalDevice = selector.set_minimum_version(1, 3)
+                                             .set_required_features(features1_0)
                                              .set_required_features_11(features1_1)
                                              .set_required_features_12(features1_2)
                                              .set_required_features_13(features1_3)
@@ -334,7 +338,7 @@ void VulkanEngine::init_triangle_pipeline() {
 void VulkanEngine::init_mesh_pipeline() {
     VkShaderModule triangleFragShader;
     char buffer[MAX_PATH];
-    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\colored_triangle_frag.spv"),
+    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\colored_triangle_mesh_frag.spv"),
                                     _device, &triangleFragShader)) {
         fmt::print("Error when building the triangle fragment shader module");
     } else {
@@ -342,11 +346,11 @@ void VulkanEngine::init_mesh_pipeline() {
     }
 
     VkShaderModule triangleVertexShader;
-    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\colored_triangle_vert.spv"),
+    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\colored_triangle_mesh_vert.spv"),
                                     this->_device, &triangleVertexShader)) {
-        fmt::print("Error when building the triangle vertex shader module\n");
+        fmt::println("Error when building the triangle vertex shader module.");
     } else {
-        fmt::print("Triangle vertex shader successfully loaded\n");
+        fmt::println("Triangle vertex shader successfully loaded.");
     }
 
     VkPushConstantRange bufferRange{
@@ -797,6 +801,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
 
     vkCmdPushConstants(cmd, this->_meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants),
                        &push_constants);
+    vkCmdBindIndexBuffer(cmd, this->rectangle.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
     vkCmdDrawIndexed(cmd, 6, 1, 0, 0, 0);
 
     vkCmdEndRendering(cmd);
@@ -857,7 +862,8 @@ void VulkanEngine::run() {
     }
 }
 
-AllocatedBuffer VulkanEngine::create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) {
+AllocatedBuffer VulkanEngine::create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage,
+                                            const char* name) {
     VkBufferCreateInfo bufferInfo = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .pNext = nullptr, .size = allocSize, .usage = usage};
 
@@ -869,6 +875,11 @@ AllocatedBuffer VulkanEngine::create_buffer(size_t allocSize, VkBufferUsageFlags
     AllocatedBuffer newBuffer;
     VK_CHECK(vmaCreateBuffer(this->_allocator, &bufferInfo, &vmaAllocInfo, &newBuffer.buffer, &newBuffer.allocation,
                              &newBuffer.info));
+
+    VkDebugUtilsObjectNameInfoEXT nameInfo{.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+                                           .objectType = VK_OBJECT_TYPE_BUFFER,
+                                           .objectHandle = (uint64_t)newBuffer.buffer,
+                                           .pObjectName = name};
     return newBuffer;
 }
 
@@ -882,19 +893,20 @@ GPUMeshBuffers VulkanEngine::upload_mesh(std::span<uint32_t> indices, std::span<
 
     GPUMeshBuffers newSurface;
 
-    newSurface.vertexBuffer =
-        create_buffer(vertexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
-
-    VkBufferDeviceAddressInfo deviceAddressInfo{
-        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-    };
-
+    newSurface.vertexBuffer = create_buffer(vertexBufferSize,
+                                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                            VMA_MEMORY_USAGE_GPU_ONLY, "vertex_buffer");
+    VkBufferDeviceAddressInfo deviceAddressInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+                                                .buffer = newSurface.vertexBuffer.buffer};
     newSurface.vertexBufferAddress = vkGetBufferDeviceAddress(this->_device, &deviceAddressInfo);
-    newSurface.indexBuffer =
-        create_buffer(indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
-    AllocatedBuffer staging =
-        create_buffer(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+    newSurface.indexBuffer =
+        create_buffer(indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                      VMA_MEMORY_USAGE_GPU_ONLY, "index_buffer");
+
+    AllocatedBuffer staging = create_buffer(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                            VMA_MEMORY_USAGE_CPU_ONLY, "staging_buffer");
 
     void* data = staging.allocation->GetMappedData();
     memcpy(data, vertices.data(), vertexBufferSize);

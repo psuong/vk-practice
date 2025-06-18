@@ -22,6 +22,22 @@ if ($type -eq "glsl") {
         Write-Host "Compiling $shader"
         glslangValidator.exe -V $shader -o $target
     }
+
+    foreach ($shader in Get-ChildItem .\shaders -Filter *.vert) {
+        $name = (Get-Item $shader).BaseName + "_vert.spv"
+        $target = ".\bin\shaders\$name"
+
+        Write-Host "Compiling glsl vert: $shader"
+        glslangValidator.exe -V $shader -o $target
+    }
+
+    foreach ($shader in Get-ChildItem .\shaders -Filter *.frag) {
+        $name = (Get-Item $shader).BaseName + "_frag.spv"
+        $target = ".\bin\shaders\$name"
+
+        Write-Host "Compiling glsl frag: $shader"
+        glslangValidator.exe -V $shader -o $target
+    }
 } else {
     Write-Host "Compiling slang shaders"
     foreach ($shader in Get-ChildItem .\shaders -Filter *.slang) {
