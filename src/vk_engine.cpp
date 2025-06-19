@@ -1,4 +1,5 @@
 ﻿//> includes
+#include "vk_loader.h"
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -507,6 +508,9 @@ void VulkanEngine::init_default_data() {
         this->destroy_buffer(rectangle.indexBuffer);
         this->destroy_buffer(rectangle.vertexBuffer);
     });
+
+    // TODO: Like the shaders, use the relative path
+    this->testMeshes = loadGltfMeshes(this, "..\\..\\assets\\basicmesh.glb").value();
 }
 
 void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {

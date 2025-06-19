@@ -6,6 +6,7 @@
 #include "deletion_queue.h"
 #include "glm/ext/vector_float4.hpp"
 #include "vk_descriptors.h"
+#include "vk_loader.h"
 #include "vk_mem_alloc.h"
 #include <functional>
 #include <span>
@@ -131,6 +132,8 @@ class VulkanEngine {
     VkPipeline _meshPipeline;
 
     GPUMeshBuffers rectangle;
+
+    std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 
     void init_vulkan();
     void init_swapchain();
