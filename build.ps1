@@ -10,6 +10,14 @@ if (-Not (Test-Path -Path bin/shaders)) {
     New-Item .\bin\shaders -ItemType "directory"
 }
 
+if (-Not (Test-Path -Path bin/assets)) {
+    New-Item .\bin\assets -ItemType "directory"
+}
+
+# Copy the assets directory to the bin directory
+Write-Output "Copying assets to bin..."
+Copy-Item -Path "assets\\*" -Destination "bin\\assets\\" -Recurse -Force
+
 cmake --preset ninja
 cmake --build --preset ninja-build
 

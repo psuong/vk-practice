@@ -19,6 +19,7 @@
 
 #include <SDL.h>
 #include <SDL_vulkan.h>
+#include <glm/gtx/transform.hpp>
 
 #include <vk_initializers.h>
 #include <vk_types.h>
@@ -293,7 +294,7 @@ void VulkanEngine::init_pipelines() {
 void VulkanEngine::init_triangle_pipeline() {
     VkShaderModule triangleFragShader;
     char buffer[MAX_PATH];
-    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\colored_triangle_frag.spv"),
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\colored_triangle_frag.spv"),
                                     this->_device, &triangleFragShader)) {
         fmt::print("Error when building the triangle fragment shader module\n");
     } else {
@@ -301,7 +302,7 @@ void VulkanEngine::init_triangle_pipeline() {
     }
 
     VkShaderModule triangleVertexShader;
-    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\colored_triangle_vert.spv"),
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\colored_triangle_vert.spv"),
                                     this->_device, &triangleVertexShader)) {
         fmt::print("Error when building the triangle vertex shader module\n");
     } else {
@@ -339,16 +340,18 @@ void VulkanEngine::init_triangle_pipeline() {
 void VulkanEngine::init_mesh_pipeline() {
     VkShaderModule triangleFragShader;
     char buffer[MAX_PATH];
-    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\colored_triangle_mesh_frag.spv"),
-                                    _device, &triangleFragShader)) {
+    if (!vkutil::load_shader_module(
+            utils::get_relative_path(buffer, MAX_PATH, "shaders\\colored_triangle_mesh_frag.spv"), _device,
+            &triangleFragShader)) {
         fmt::print("Error when building the triangle fragment shader module");
     } else {
         fmt::print("Triangle fragment shader succesfully loaded");
     }
 
     VkShaderModule triangleVertexShader;
-    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\colored_triangle_mesh_vert.spv"),
-                                    this->_device, &triangleVertexShader)) {
+    if (!vkutil::load_shader_module(
+            utils::get_relative_path(buffer, MAX_PATH, "shaders\\colored_triangle_mesh_vert.spv"), this->_device,
+            &triangleVertexShader)) {
         fmt::println("Error when building the triangle vertex shader module.");
     } else {
         fmt::println("Triangle vertex shader successfully loaded.");
@@ -409,13 +412,13 @@ void VulkanEngine::init_background_pipelines() {
     // TODO: Load the sky shader module
     VkShaderModule gradientShader;
     char buffer[MAX_PATH];
-    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\gradient_color.comp.spv"),
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\gradient_color.comp.spv"),
                                     this->_device, &gradientShader)) {
         fmt::println("[ERROR] Cannot build the gradient compute shader");
     }
 
     VkShaderModule skyShader;
-    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\sky.comp.spv"), this->_device,
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\sky.comp.spv"), this->_device,
                                     &skyShader)) {
         fmt::println("[ERROR] Cannot build the sky compute shader");
     }
@@ -508,9 +511,12 @@ void VulkanEngine::init_default_data() {
         this->destroy_buffer(rectangle.indexBuffer);
         this->destroy_buffer(rectangle.vertexBuffer);
     });
+    char buffer[MAX_PATH];
+
+    const char* basic_mesh_path = utils::get_relative_path(buffer, MAX_PATH, "assets\\basicmesh.glb");
 
     // TODO: Like the shaders, use the relative path
-    this->testMeshes = loadGltfMeshes(this, "..\\..\\assets\\basicmesh.glb").value();
+    this->testMeshes = loadGltfMeshes(this, basic_mesh_path).value();
 }
 
 void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
@@ -665,7 +671,7 @@ void VulkanEngine::draw() {
     // Then overwrite it all, b/c we dont care about what the older layout was
     vkutil::transition_image(cmd, this->_drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-    this->draw_background(cmd);
+    // this->draw_background(cmd);
 
     // For start, transition the swapchain image to a drawable layout, then
     // clear it, and finally transition it back for display
@@ -779,7 +785,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     VkRenderingInfo renderInfo = vkinit::rendering_info(_drawExtent, &colorAttachment, nullptr);
     vkCmdBeginRendering(cmd, &renderInfo);
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _trianglePipeline);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, this->_trianglePipeline);
 
     // set dynamic viewport and scissor
     VkViewport viewport = {.x = 0,
@@ -802,11 +808,30 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, this->_meshPipeline);
 
     GPUDrawPushConstants push_constants{.worldMatrix = glm::mat4{1.f}, .vertexBuffer = rectangle.vertexBufferAddress};
+    // TODO: Reenable
+    // vkCmdPushConstants(cmd, this->_meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants),
+    //                    &push_constants);
+    // vkCmdBindIndexBuffer(cmd, this->rectangle.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+    // vkCmdDrawIndexed(cmd, 6, 1, 0, 0, 0);
+
+    // MeshDraw
+    glm::mat4 view = glm::translate(glm::vec3{0, 0, -5});
+    // camera projection
+    glm::mat4 projection =
+        glm::perspective(glm::radians(70.f), (float)_drawExtent.width / (float)_drawExtent.height, 10000.f, 0.1f);
+
+    // invert the Y direction on projection matrix so that we are more similar
+    // to opengl and gltf axis
+    projection[1][1] *= -1;
+
+    push_constants.worldMatrix = projection * view;
+    push_constants.vertexBuffer = this->testMeshes[2]->meshBuffers.vertexBufferAddress;
 
     vkCmdPushConstants(cmd, this->_meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants),
                        &push_constants);
-    vkCmdBindIndexBuffer(cmd, this->rectangle.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(cmd, 6, 1, 0, 0, 0);
+
+    vkCmdBindIndexBuffer(cmd, this->testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(cmd, this->testMeshes[2]->surfaces[0].count, 1, testMeshes[2]->surfaces[0].startIndex, 0, 0);
 
     vkCmdEndRendering(cmd);
 }
