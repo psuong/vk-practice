@@ -9,6 +9,7 @@
 #include "vk_loader.h"
 #include "vk_mem_alloc.h"
 #include <functional>
+#include <memory>
 #include <span>
 #include <vk_types.h>
 #include <vulkan/vulkan_core.h>
@@ -120,6 +121,7 @@ class VulkanEngine {
     DeletionQueue _mainDeletionQueue;
     VmaAllocator _allocator;
     AllocatedImage _drawImage;
+    AllocatedImage _depthImage;
     VkExtent2D _drawExtent;
 
     std::vector<ComputeEffect> backgroundEffects;

@@ -1,4 +1,7 @@
 ﻿//> includes
+#include "glm/ext/matrix_clip_space.hpp"
+#include "glm/ext/vector_float3.hpp"
+#include "glm/gtx/transform.hpp"
 #include "vk_loader.h"
 #include <array>
 #include <cmath>
@@ -156,10 +159,32 @@ void VulkanEngine::init_swapchain() {
         vkinit::imageview_create_info(this->_drawImage.imageFormat, this->_drawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
     VK_CHECK(vkCreateImageView(this->_device, &rViewInfo, VK_NULL_HANDLE, &this->_drawImage.imageView));
 
+    this->_depthImage.imageFormat = VK_FORMAT_D32_SFLOAT;
+    this->_depthImage.imageExtent = drawImageExtent;
+
+    VkImageUsageFlags depthImageUsages{};
+    depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+    VkImageCreateInfo dimg_info =
+        vkinit::image_create_info(this->_depthImage.imageFormat, depthImageUsages, drawImageExtent);
+
+    // allocate and create the image
+    vmaCreateImage(this->_allocator, &dimg_info, &rimgAllocInfo, &this->_depthImage.image,
+                   &this->_depthImage.allocation, nullptr);
+
+    // build a image-view for the draw image to use for rendering
+    VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(
+        this->_depthImage.imageFormat, this->_depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+    VK_CHECK(vkCreateImageView(_device, &dview_info, nullptr, &_depthImage.imageView));
+
     // Add to the deletion queue because we've allocated memory on the gpu
     this->_mainDeletionQueue.push_function([=, this]() {
         vkDestroyImageView(this->_device, this->_drawImage.imageView, VK_NULL_HANDLE);
         vmaDestroyImage(this->_allocator, this->_drawImage.image, this->_drawImage.allocation);
+
+        vkDestroyImageView(this->_device, this->_depthImage.imageView, VK_NULL_HANDLE);
+        vmaDestroyImage(this->_allocator, this->_depthImage.image, this->_depthImage.allocation);
     });
 }
 
@@ -293,7 +318,7 @@ void VulkanEngine::init_pipelines() {
 void VulkanEngine::init_triangle_pipeline() {
     VkShaderModule triangleFragShader;
     char buffer[MAX_PATH];
-    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\colored_triangle_frag.spv"),
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\colored_triangle_frag.spv"),
                                     this->_device, &triangleFragShader)) {
         fmt::print("Error when building the triangle fragment shader module\n");
     } else {
@@ -301,7 +326,7 @@ void VulkanEngine::init_triangle_pipeline() {
     }
 
     VkShaderModule triangleVertexShader;
-    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\colored_triangle_vert.spv"),
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\colored_triangle_vert.spv"),
                                     this->_device, &triangleVertexShader)) {
         fmt::print("Error when building the triangle vertex shader module\n");
     } else {
@@ -321,7 +346,7 @@ void VulkanEngine::init_triangle_pipeline() {
                                   .disable_blending()
                                   .disable_depthtest()
                                   .set_color_attachment_format(this->_drawImage.imageFormat)
-                                  .set_depth_format(VK_FORMAT_UNDEFINED)
+                                  .set_depth_format(VK_FORMAT_D32_SFLOAT)
                                   .build_pipeline(this->_device, "triangle_pipeline");
 
     vkDestroyShaderModule(this->_device, triangleFragShader, nullptr);
@@ -339,16 +364,18 @@ void VulkanEngine::init_triangle_pipeline() {
 void VulkanEngine::init_mesh_pipeline() {
     VkShaderModule triangleFragShader;
     char buffer[MAX_PATH];
-    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\colored_triangle_mesh_frag.spv"),
-                                    _device, &triangleFragShader)) {
+    if (!vkutil::load_shader_module(
+            utils::get_relative_path(buffer, MAX_PATH, "shaders\\colored_triangle_mesh_frag.spv"), _device,
+            &triangleFragShader)) {
         fmt::print("Error when building the triangle fragment shader module");
     } else {
         fmt::print("Triangle fragment shader succesfully loaded");
     }
 
     VkShaderModule triangleVertexShader;
-    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\colored_triangle_mesh_vert.spv"),
-                                    this->_device, &triangleVertexShader)) {
+    if (!vkutil::load_shader_module(
+            utils::get_relative_path(buffer, MAX_PATH, "shaders\\colored_triangle_mesh_vert.spv"), this->_device,
+            &triangleVertexShader)) {
         fmt::println("Error when building the triangle vertex shader module.");
     } else {
         fmt::println("Triangle vertex shader successfully loaded.");
@@ -372,9 +399,9 @@ void VulkanEngine::init_mesh_pipeline() {
                               .set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
                               .set_multisampling_none()
                               .disable_blending()
-                              .disable_depthtest()
+                              .enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL)
                               .set_color_attachment_format(this->_drawImage.imageFormat)
-                              .set_depth_format(VK_FORMAT_UNDEFINED)
+                              .set_depth_format(this->_depthImage.imageFormat)
                               .build_pipeline(this->_device, "mesh_pipeline");
 
     // Destroy the shaders
@@ -409,13 +436,13 @@ void VulkanEngine::init_background_pipelines() {
     // TODO: Load the sky shader module
     VkShaderModule gradientShader;
     char buffer[MAX_PATH];
-    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\gradient_color.comp.spv"),
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\gradient_color.comp.spv"),
                                     this->_device, &gradientShader)) {
         fmt::println("[ERROR] Cannot build the gradient compute shader");
     }
 
     VkShaderModule skyShader;
-    if (!vkutil::load_shader_module(utils::get_shader_path(buffer, MAX_PATH, "shaders\\sky.comp.spv"), this->_device,
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\sky.comp.spv"), this->_device,
                                     &skyShader)) {
         fmt::println("[ERROR] Cannot build the sky compute shader");
     }
@@ -509,8 +536,10 @@ void VulkanEngine::init_default_data() {
         this->destroy_buffer(rectangle.vertexBuffer);
     });
 
-    // TODO: Like the shaders, use the relative path
-    this->testMeshes = loadGltfMeshes(this, "..\\..\\assets\\basicmesh.glb").value();
+    char buffer[MAX_PATH];
+
+    const char* basic_mesh_path = utils::get_relative_path(buffer, MAX_PATH, "assets\\basicmesh.glb");
+    this->testMeshes = loadGltfMeshes(this, buffer).value();
 }
 
 void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
@@ -609,6 +638,13 @@ void VulkanEngine::cleanup() {
 
             frameData._deletionQueue.flush();
         }
+
+        // Cleanup all of the loaded meshes
+        for (auto& mesh : this->testMeshes) {
+            this->destroy_buffer(mesh->meshBuffers.indexBuffer);
+            this->destroy_buffer(mesh->meshBuffers.vertexBuffer);
+        }
+
         this->_mainDeletionQueue.flush();
 
         // Perform all of the clean up operations
@@ -671,6 +707,8 @@ void VulkanEngine::draw() {
     // clear it, and finally transition it back for display
     vkutil::transition_image(cmd, this->_drawImage.image, VK_IMAGE_LAYOUT_GENERAL,
                              VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    vkutil::transition_image(cmd, this->_depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED,
+                             VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
     this->draw_geometry(cmd);
 
@@ -774,9 +812,12 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd) {
 void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     // begin a render pass  connected to our draw image
     VkRenderingAttachmentInfo colorAttachment =
-        vkinit::attachment_info(_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        vkinit::attachment_info(this->_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    VkRenderingInfo renderInfo = vkinit::rendering_info(_drawExtent, &colorAttachment, nullptr);
+    VkRenderingAttachmentInfo depthAttachment =
+        vkinit::depth_attachment_info(this->_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+    VkRenderingInfo renderInfo = vkinit::rendering_info(_drawExtent, &colorAttachment, &depthAttachment);
     vkCmdBeginRendering(cmd, &renderInfo);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _trianglePipeline);
@@ -807,6 +848,22 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
                        &push_constants);
     vkCmdBindIndexBuffer(cmd, this->rectangle.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
     vkCmdDrawIndexed(cmd, 6, 1, 0, 0, 0);
+
+    // Draw the monkey head
+    glm::mat4 view = glm::translate(glm::vec3(0, 0, -5));
+    glm::mat4 projection = glm::perspective(
+        glm::radians(70.0f), (float)this->_drawExtent.width / (float)this->_drawExtent.height, 10000.f, 0.1f);
+
+    projection[1][1] *= -1;
+    push_constants.worldMatrix = projection * view;
+
+    push_constants.vertexBuffer = this->testMeshes[2]->meshBuffers.vertexBufferAddress;
+
+    vkCmdPushConstants(cmd, this->_meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants),
+                       &push_constants);
+    vkCmdBindIndexBuffer(cmd, this->testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(cmd, this->testMeshes[2]->surfaces[0].count, 1, this->testMeshes[2]->surfaces[0].start_index, 0,
+                     0);
 
     vkCmdEndRendering(cmd);
 }

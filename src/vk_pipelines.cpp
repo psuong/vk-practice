@@ -186,6 +186,19 @@ vkutil::PipelineBuilder& vkutil::PipelineBuilder::set_depth_format(VkFormat form
     return *this;
 }
 
+vkutil::PipelineBuilder& vkutil::PipelineBuilder::enable_depthtest(bool depthWriteEnable, VkCompareOp op) {
+    this->_depthStencil.depthTestEnable = VK_TRUE;
+    this->_depthStencil.depthWriteEnable = depthWriteEnable;
+    this->_depthStencil.depthCompareOp = op;
+    this->_depthStencil.depthBoundsTestEnable = VK_FALSE;
+    this->_depthStencil.stencilTestEnable = VK_FALSE;
+    this->_depthStencil.front = {};
+    this->_depthStencil.back = {};
+    this->_depthStencil.minDepthBounds = 0.f;
+    this->_depthStencil.maxDepthBounds = 1.f;
+    return *this;
+}
+
 vkutil::PipelineBuilder& vkutil::PipelineBuilder::disable_depthtest() {
     this->_depthStencil.depthTestEnable = VK_FALSE;
     this->_depthStencil.depthWriteEnable = VK_FALSE;
