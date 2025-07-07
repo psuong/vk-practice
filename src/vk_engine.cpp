@@ -1,4 +1,7 @@
 ﻿//> includes
+#include "glm/ext/matrix_clip_space.hpp"
+#include "glm/ext/vector_float3.hpp"
+#include "glm/gtx/transform.hpp"
 #include "vk_loader.h"
 #include <array>
 #include <cmath>
@@ -613,6 +616,13 @@ void VulkanEngine::cleanup() {
 
             frameData._deletionQueue.flush();
         }
+
+        // Cleanup all of the loaded meshes
+        for (auto& mesh : this->testMeshes) {
+            this->destroy_buffer(mesh->meshBuffers.indexBuffer);
+            this->destroy_buffer(mesh->meshBuffers.vertexBuffer);
+        }
+
         this->_mainDeletionQueue.flush();
 
         // Perform all of the clean up operations
@@ -813,6 +823,13 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     vkCmdDrawIndexed(cmd, 6, 1, 0, 0, 0);
 
     // Draw the monkey head
+    glm::mat4 view = glm::translate(glm::vec3(0, 0, -5));
+    glm::mat4 projection = glm::perspective(
+        glm::radians(70.0f), (float)this->_drawExtent.width / (float)this->_drawExtent.height, 10000.f, 0.1f);
+
+    projection[1][1] *= -1;
+    push_constants.worldMatrix = projection * view;
+
     push_constants.vertexBuffer = this->testMeshes[2]->meshBuffers.vertexBufferAddress;
 
     vkCmdPushConstants(cmd, this->_meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants),
