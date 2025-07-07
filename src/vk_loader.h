@@ -1,23 +1,24 @@
 ﻿#pragma once
 
-#include <optional>
-#include <vk_types.h>
+#include "vk_types.h"
+#include <vk_loader.h>
 #include <unordered_map>
 #include <filesystem>
 
 struct GeoSurface {
-    uint32_t startIndex;
+    uint32_t start_index;
     uint32_t count;
 };
 
 struct MeshAsset {
     std::string name;
+
     std::vector<GeoSurface> surfaces;
     GPUMeshBuffers meshBuffers;
 };
 
-
-// We need to forward declare VulkanEngine, because we will rely on it
+// Forward declaration
 class VulkanEngine;
 
-std::optional<std::vector<std::shared_ptr<MeshAsset>>> loadGltfMeshes(VulkanEngine* engine, std::filesystem::path filePath);
+std::optional<std::vector<std::shared_ptr<MeshAsset>>> loadGltfMeshes(VulkanEngine* engine,
+                                                                      std::filesystem::path filePath);

@@ -9,6 +9,7 @@
 #include "vk_loader.h"
 #include "vk_mem_alloc.h"
 #include <functional>
+#include <memory>
 #include <span>
 #include <vk_types.h>
 #include <vulkan/vulkan_core.h>
