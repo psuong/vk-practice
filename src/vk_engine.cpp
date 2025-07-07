@@ -159,10 +159,32 @@ void VulkanEngine::init_swapchain() {
         vkinit::imageview_create_info(this->_drawImage.imageFormat, this->_drawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
     VK_CHECK(vkCreateImageView(this->_device, &rViewInfo, VK_NULL_HANDLE, &this->_drawImage.imageView));
 
+    this->_depthImage.imageFormat = VK_FORMAT_D32_SFLOAT;
+    this->_depthImage.imageExtent = drawImageExtent;
+
+    VkImageUsageFlags depthImageUsages{};
+    depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+    VkImageCreateInfo dimg_info =
+        vkinit::image_create_info(this->_depthImage.imageFormat, depthImageUsages, drawImageExtent);
+
+    // allocate and create the image
+    vmaCreateImage(this->_allocator, &dimg_info, &rimgAllocInfo, &this->_depthImage.image,
+                   &this->_depthImage.allocation, nullptr);
+
+    // build a image-view for the draw image to use for rendering
+    VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(
+        this->_depthImage.imageFormat, this->_depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+    VK_CHECK(vkCreateImageView(_device, &dview_info, nullptr, &_depthImage.imageView));
+
     // Add to the deletion queue because we've allocated memory on the gpu
     this->_mainDeletionQueue.push_function([=, this]() {
         vkDestroyImageView(this->_device, this->_drawImage.imageView, VK_NULL_HANDLE);
         vmaDestroyImage(this->_allocator, this->_drawImage.image, this->_drawImage.allocation);
+
+        vkDestroyImageView(this->_device, this->_depthImage.imageView, VK_NULL_HANDLE);
+        vmaDestroyImage(this->_allocator, this->_depthImage.image, this->_depthImage.allocation);
     });
 }
 
@@ -324,7 +346,7 @@ void VulkanEngine::init_triangle_pipeline() {
                                   .disable_blending()
                                   .disable_depthtest()
                                   .set_color_attachment_format(this->_drawImage.imageFormat)
-                                  .set_depth_format(VK_FORMAT_UNDEFINED)
+                                  .set_depth_format(VK_FORMAT_D32_SFLOAT)
                                   .build_pipeline(this->_device, "triangle_pipeline");
 
     vkDestroyShaderModule(this->_device, triangleFragShader, nullptr);
@@ -377,9 +399,9 @@ void VulkanEngine::init_mesh_pipeline() {
                               .set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
                               .set_multisampling_none()
                               .disable_blending()
-                              .disable_depthtest()
+                              .enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL)
                               .set_color_attachment_format(this->_drawImage.imageFormat)
-                              .set_depth_format(VK_FORMAT_UNDEFINED)
+                              .set_depth_format(this->_depthImage.imageFormat)
                               .build_pipeline(this->_device, "mesh_pipeline");
 
     // Destroy the shaders
@@ -685,6 +707,8 @@ void VulkanEngine::draw() {
     // clear it, and finally transition it back for display
     vkutil::transition_image(cmd, this->_drawImage.image, VK_IMAGE_LAYOUT_GENERAL,
                              VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    vkutil::transition_image(cmd, this->_depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED,
+                             VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
     this->draw_geometry(cmd);
 
@@ -788,9 +812,12 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd) {
 void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     // begin a render pass  connected to our draw image
     VkRenderingAttachmentInfo colorAttachment =
-        vkinit::attachment_info(_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        vkinit::attachment_info(this->_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    VkRenderingInfo renderInfo = vkinit::rendering_info(_drawExtent, &colorAttachment, nullptr);
+    VkRenderingAttachmentInfo depthAttachment =
+        vkinit::depth_attachment_info(this->_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+    VkRenderingInfo renderInfo = vkinit::rendering_info(_drawExtent, &colorAttachment, &depthAttachment);
     vkCmdBeginRendering(cmd, &renderInfo);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _trianglePipeline);

@@ -121,6 +121,7 @@ class VulkanEngine {
     DeletionQueue _mainDeletionQueue;
     VmaAllocator _allocator;
     AllocatedImage _drawImage;
+    AllocatedImage _depthImage;
     VkExtent2D _drawExtent;
 
     std::vector<ComputeEffect> backgroundEffects;
