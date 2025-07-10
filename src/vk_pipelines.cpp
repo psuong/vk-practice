@@ -211,3 +211,28 @@ vkutil::PipelineBuilder& vkutil::PipelineBuilder::disable_depthtest() {
     this->_depthStencil.maxDepthBounds = 1.0f;
     return *this;
 }
+
+vkutil::PipelineBuilder& vkutil::PipelineBuilder::enable_blending_additive() {
+    this->_colorBlendAttachment.colorWriteMask =
+        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    this->_colorBlendAttachment.blendEnable = VK_TRUE;
+    this->_colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    this->_colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    this->_colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+    this->_colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    this->_colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    this->_colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    return *this;
+}
+
+vkutil::PipelineBuilder& vkutil::PipelineBuilder::enable_blending_alphablend() {
+    this->_colorBlendAttachment.colorWriteMask =
+        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    this->_colorBlendAttachment.blendEnable = VK_TRUE;
+    this->_colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    this->_colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    this->_colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+    this->_colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    this->_colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    this->_colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+}

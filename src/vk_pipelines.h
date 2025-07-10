@@ -37,5 +37,7 @@ class PipelineBuilder {
     PipelineBuilder& set_depth_format(VkFormat format);
     PipelineBuilder& enable_depthtest(bool depthWriteEnable, VkCompareOp op);
     PipelineBuilder& disable_depthtest();
+    PipelineBuilder& enable_blending_additive();
+    PipelineBuilder& enable_blending_alphablend();
 };
 }; // namespace vkutil

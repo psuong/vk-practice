@@ -347,6 +347,7 @@ void VulkanEngine::init_triangle_pipeline() {
                                   .disable_depthtest()
                                   .set_color_attachment_format(this->_drawImage.imageFormat)
                                   .set_depth_format(VK_FORMAT_D32_SFLOAT)
+                                  .enable_blending_additive()
                                   .build_pipeline(this->_device, "triangle_pipeline");
 
     vkDestroyShaderModule(this->_device, triangleFragShader, nullptr);
