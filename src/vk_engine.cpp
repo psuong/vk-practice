@@ -1,4 +1,5 @@
 ﻿//> includes
+#include "SDL_video.h"
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/vector_float3.hpp"
 #include "glm/gtx/transform.hpp"
@@ -46,7 +47,7 @@ void VulkanEngine::init() {
     // We initialize SDL and create a window with it.
     SDL_Init(SDL_INIT_VIDEO);
 
-    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN);
+    SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 
     _window = SDL_CreateWindow("Vulkan Engine", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, _windowExtent.width,
                                _windowExtent.height, window_flags);
@@ -133,7 +134,7 @@ void VulkanEngine::init_vulkan() {
 }
 
 void VulkanEngine::init_swapchain() {
-    this->create_swapchain(_windowExtent.width, _windowExtent.height);
+    this->create_swapchain(this->_windowExtent.width, this->_windowExtent.height);
     VkExtent3D drawImageExtent = {this->_windowExtent.width, this->_windowExtent.height, 1};
 
     // 64 bits per pixel
@@ -681,8 +682,13 @@ void VulkanEngine::draw() {
     // When acquiring the image from the swapchain, we request an available one.
     // We have a timeout to wait until the next image is available if there is
     // none available.
-    VK_CHECK(vkAcquireNextImageKHR(device, this->_swapchain, 1000000000, frameData._swapchainSemaphore, VK_NULL_HANDLE,
-                                   &swapchainImageIndex));
+    VkResult err = vkAcquireNextImageKHR(device, this->_swapchain, 1000000000, frameData._swapchainSemaphore,
+                                         VK_NULL_HANDLE, &swapchainImageIndex);
+
+    if (err == VK_ERROR_OUT_OF_DATE_KHR) {
+        resize_requested = true;
+        return;
+    }
 
     VkCommandBuffer cmd = frameData._mainCommandBuffer;
     // Ensure that our cmd buffer is resetted
@@ -692,8 +698,10 @@ void VulkanEngine::draw() {
     VkCommandBufferBeginInfo cmdBeginInfo =
         vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-    this->_drawExtent.width = this->_drawImage.imageExtent.width;
-    this->_drawExtent.height = this->_drawImage.imageExtent.height;
+    this->_drawExtent.width =
+        min(this->_swapchainExtent.width, this->_drawImage.imageExtent.width) * this->renderScale;
+    this->_drawExtent.height =
+        min(this->_swapchainExtent.height, this->_drawImage.imageExtent.height) * this->renderScale;
 
     // Begin recording
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
@@ -770,7 +778,10 @@ void VulkanEngine::draw() {
 
     presentInfo.pImageIndices = &swapchainImageIndex;
 
-    VK_CHECK(vkQueuePresentKHR(this->_graphicsQueue, &presentInfo));
+    VkResult presentResult = vkQueuePresentKHR(this->_graphicsQueue, &presentInfo);
+    if (presentResult == VK_ERROR_OUT_OF_DATE_KHR) {
+        resize_requested = true;
+    }
 
     this->_frameNumber++;
 }
@@ -901,12 +912,17 @@ void VulkanEngine::run() {
             continue;
         }
 
+        if (this->resize_requested) {
+            this->resize_swapchain();
+        }
+
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
 
         // ImGui::ShowDemoWindow();
         if (ImGui::Begin("background")) {
+            ImGui::SliderFloat("Render Scale", &this->renderScale, 0.3, 1.0f);
             ComputeEffect& selected = this->backgroundEffects[this->currentBackgroundEffect];
             ImGui::Text("Selected effect: ", selected.name);
             ImGui::SliderInt("Effect Index", &this->currentBackgroundEffect, 0, this->backgroundEffects.size() - 1);
@@ -988,4 +1004,17 @@ GPUMeshBuffers VulkanEngine::upload_mesh(std::span<uint32_t> indices, std::span<
 
     this->destroy_buffer(staging);
     return newSurface;
+}
+
+void VulkanEngine::resize_swapchain() {
+    vkDeviceWaitIdle(this->_device);
+    this->destroy_swapchain();
+
+    int w, h;
+    SDL_GetWindowSize(this->_window, &w, &h);
+    this->_windowExtent.width = w;
+    this->_windowExtent.height = h;
+
+    this->create_swapchain(this->_windowExtent.width, this->_windowExtent.height);
+    this->resize_requested = false;
 }
