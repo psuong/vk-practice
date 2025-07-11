@@ -123,6 +123,7 @@ class VulkanEngine {
     AllocatedImage _drawImage;
     AllocatedImage _depthImage;
     VkExtent2D _drawExtent;
+    float renderScale = 1.f;
 
     std::vector<ComputeEffect> backgroundEffects;
     int currentBackgroundEffect{0};
@@ -136,6 +137,8 @@ class VulkanEngine {
     GPUMeshBuffers rectangle;
 
     std::vector<std::shared_ptr<MeshAsset>> testMeshes;
+
+    bool resize_requested;
 
     void init_vulkan();
     void init_swapchain();
@@ -161,4 +164,5 @@ class VulkanEngine {
     AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage,
                                   const char* name);
     void destroy_buffer(const AllocatedBuffer& buffer);
+    void resize_swapchain();
 };
