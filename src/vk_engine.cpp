@@ -289,14 +289,43 @@ void VulkanEngine::init_descriptors() {
         this->globalDescriptorAllocator.allocate(this->_device, this->_drawImageDescriptorLayout);
 
     DescriptorWriter writer;
-    writer.write_image(0, this->_drawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+    writer.write_image(0, this->_drawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL,
+                       VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
     writer.update_set(this->_device, this->_drawImageDescriptors);
 
     // Clean up the descriptor allocator and new layout
-    this->_mainDeletionQueue.push_function([&]() {
+    this->_mainDeletionQueue.push_function([&, this]() {
         this->globalDescriptorAllocator.destroy_pool(this->_device);
         vkDestroyDescriptorSetLayout(this->_device, this->_drawImageDescriptorLayout, nullptr);
     });
+
+    for (int i = 0; i < FRAME_OVERLAP; i++) {
+        // create a descriptor pool
+        std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> frame_sizes = {
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
+        };
+
+        this->_frames[i]._frameDescriptors = DescriptorAllocatorGrowable{};
+        this->_frames[i]._frameDescriptors.init(this->_device, 1000, frame_sizes);
+
+        this->_mainDeletionQueue.push_function(
+            [&, i, this]() { this->_frames[i]._frameDescriptors.destroy_pools(this->_device); });
+    }
+
+    {
+        DescriptorLayoutBuilder builder;
+        this->_gpuSceneDataDescriptorLayout =
+            builder.add_bindings(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+                .build(this->_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+
+        // Cleanup the gpuSceneDataDescriptor
+        this->_mainDeletionQueue.push_function([&, this]() {
+            vkDestroyDescriptorSetLayout(this->_device, this->_gpuSceneDataDescriptorLayout, nullptr);
+        });
+    }
 }
 
 void VulkanEngine::init_pipelines() {
@@ -655,6 +684,11 @@ void VulkanEngine::cleanup() {
 }
 
 void VulkanEngine::draw() {
+    VK_CHECK(vkWaitForFences(this->_device, 1, &this->get_current_frame()._renderFence, true, 1000000000));
+
+    this->get_current_frame()._deletionQueue.flush();
+    this->get_current_frame()._frameDescriptors.clear_pools(this->_device);
+
     FrameData& frameData = get_current_frame();
     VkDevice device = this->_device;
 
@@ -687,8 +721,7 @@ void VulkanEngine::draw() {
     VkCommandBufferBeginInfo cmdBeginInfo =
         vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-    this->_drawExtent.width =
-        min(this->_swapchainExtent.width, this->_drawImage.imageExtent.width) * this->renderScale;
+    this->_drawExtent.width = min(this->_swapchainExtent.width, this->_drawImage.imageExtent.width) * this->renderScale;
     this->_drawExtent.height =
         min(this->_swapchainExtent.height, this->_drawImage.imageExtent.height) * this->renderScale;
 
@@ -865,6 +898,27 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     vkCmdBindIndexBuffer(cmd, this->testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
     vkCmdDrawIndexed(cmd, this->testMeshes[2]->surfaces[0].count, 1, this->testMeshes[2]->surfaces[0].start_index, 0,
                      0);
+
+#if CHAPTER_4
+    // allocate a new uniform buffer for the scene data
+    AllocatedBuffer gpuSceneDataBuffer = this->create_buffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                                             VMA_MEMORY_USAGE_CPU_TO_GPU, "GPU Scene Buffer");
+
+    // add it to the deletion queue of this frame so it gets deleted once its been used
+    this->get_current_frame()._deletionQueue.push_function([=, this]() { this->destroy_buffer(gpuSceneDataBuffer); });
+
+    // write the buffer
+    GPUSceneData* sceneUniformData = (GPUSceneData*)gpuSceneDataBuffer.allocation->GetMappedData();
+    *sceneUniformData = sceneData;
+
+    // create a descriptor set that binds that buffer and update it
+    VkDescriptorSet globalDescriptor =
+        this->get_current_frame()._frameDescriptors.allocate(this->_device, this->_gpuSceneDataDescriptorLayout);
+
+    DescriptorWriter writer;
+    writer.write_buffer(0, gpuSceneDataBuffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    writer.update_set(this->_device, globalDescriptor);
+#endif
 
     vkCmdEndRendering(cmd);
 }
