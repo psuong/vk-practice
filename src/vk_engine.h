@@ -148,6 +148,14 @@ class VulkanEngine {
     GPUSceneData sceneData;
     VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
 
+    AllocatedImage _whiteImage;
+    AllocatedImage _blackImage;
+    AllocatedImage _greyImage;
+    AllocatedImage _errorCheckerboardImage;
+
+    VkSampler _defaultSamplerLinear;
+    VkSampler _defaultSamplerNearest;
+
     std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 
     bool resize_requested;

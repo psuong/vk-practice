@@ -559,6 +559,50 @@ void VulkanEngine::init_default_data() {
 
     const char* basic_mesh_path = utils::get_relative_path(buffer, MAX_PATH, "assets\\basicmesh.glb");
     this->testMeshes = loadGltfMeshes(this, buffer).value();
+
+    // 3 default textures, white, grey, black. 1 pixel each
+    uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
+    this->_whiteImage =
+        this->create_image((void*)&white, VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+
+    uint32_t grey = glm::packUnorm4x8(glm::vec4(0.66f, 0.66f, 0.66f, 1));
+    this->_greyImage = this->create_image((void*)&grey, VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+
+    uint32_t black = glm::packUnorm4x8(glm::vec4(0, 0, 0, 0));
+    this->_blackImage =
+        this->create_image((void*)&black, VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+
+    // checkerboard image
+    uint32_t magenta = glm::packUnorm4x8(glm::vec4(1, 0, 1, 1));
+    std::array<uint32_t, 16 * 16> pixels; // for 16x16 checkerboard texture
+    for (int x = 0; x < 16; x++) {
+        for (int y = 0; y < 16; y++) {
+            pixels[y * 16 + x] = ((x % 2) ^ (y % 2)) ? magenta : black;
+        }
+    }
+    this->_errorCheckerboardImage =
+        this->create_image(pixels.data(), VkExtent3D{16, 16, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+
+    VkSamplerCreateInfo sampl = {.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+
+    sampl.magFilter = VK_FILTER_NEAREST;
+    sampl.minFilter = VK_FILTER_NEAREST;
+
+    vkCreateSampler(_device, &sampl, nullptr, &_defaultSamplerNearest);
+
+    sampl.magFilter = VK_FILTER_LINEAR;
+    sampl.minFilter = VK_FILTER_LINEAR;
+    vkCreateSampler(_device, &sampl, nullptr, &_defaultSamplerLinear);
+
+    this->_mainDeletionQueue.push_function([&, this]() {
+        vkDestroySampler(this->_device, this->_defaultSamplerNearest, nullptr);
+        vkDestroySampler(this->_device, this->_defaultSamplerLinear, nullptr);
+
+        this->destroy_image(this->_whiteImage);
+        this->destroy_image(this->_greyImage);
+        this->destroy_image(this->_blackImage);
+        this->destroy_image(this->_errorCheckerboardImage);
+    });
 }
 
 void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
