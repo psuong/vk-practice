@@ -288,20 +288,9 @@ void VulkanEngine::init_descriptors() {
     this->_drawImageDescriptors =
         this->globalDescriptorAllocator.allocate(this->_device, this->_drawImageDescriptorLayout);
 
-    VkDescriptorImageInfo imgInfo{
-        .imageView = this->_drawImage.imageView,
-        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-    };
-
-    VkWriteDescriptorSet drawImageWrite = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                                           .pNext = nullptr,
-                                           .dstSet = this->_drawImageDescriptors,
-                                           .dstBinding = 0,
-                                           .descriptorCount = 1,
-                                           .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                           .pImageInfo = &imgInfo};
-
-    vkUpdateDescriptorSets(this->_device, 1, &drawImageWrite, 0, nullptr);
+    DescriptorWriter writer;
+    writer.write_image(0, this->_drawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+    writer.update_set(this->_device, this->_drawImageDescriptors);
 
     // Clean up the descriptor allocator and new layout
     this->_mainDeletionQueue.push_function([&]() {
