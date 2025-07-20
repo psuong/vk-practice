@@ -147,6 +147,7 @@ class VulkanEngine {
     GPUMeshBuffers rectangle;
     GPUSceneData sceneData;
     VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
+    VkDescriptorSetLayout _singleImageDescriptorLayout;
 
     AllocatedImage _whiteImage;
     AllocatedImage _blackImage;

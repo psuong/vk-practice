@@ -212,6 +212,34 @@ void DescriptorWriter::write_image(int binding, VkImageView image, VkSampler sam
     writes.push_back(write);
 }
 
+void DescriptorWriter::write_image(int binding, VkImageView image, VkImageLayout layout, VkDescriptorType type) {
+    VkDescriptorImageInfo& info =
+        imageInfos.emplace_back(VkDescriptorImageInfo{.imageView = image, .imageLayout = layout});
+
+    VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+
+    write.dstBinding = binding;
+    write.dstSet = VK_NULL_HANDLE; // left empty for now until we need to write it
+    write.descriptorCount = 1;
+    write.descriptorType = type;
+    write.pImageInfo = &info;
+
+    writes.push_back(write);
+}
+
+void DescriptorWriter::write_sampler(int binding, VkSampler sampler) {
+    VkDescriptorImageInfo& info = imageInfos.emplace_back(VkDescriptorImageInfo{.sampler = sampler});
+
+    VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    write.dstBinding = binding;
+    write.dstSet = VK_NULL_HANDLE;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+    write.pImageInfo = &info;
+
+    writes.push_back(write);
+}
+
 void DescriptorWriter::clear() {
     imageInfos.clear();
     writes.clear();

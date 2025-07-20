@@ -302,10 +302,9 @@ void VulkanEngine::init_descriptors() {
     for (int i = 0; i < FRAME_OVERLAP; i++) {
         // create a descriptor pool
         std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> frame_sizes = {
-            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
-            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3},  {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
+            {VK_DESCRIPTOR_TYPE_SAMPLER, 4},        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 4},
         };
 
         this->_frames[i]._frameDescriptors = DescriptorAllocatorGrowable{};
@@ -324,6 +323,16 @@ void VulkanEngine::init_descriptors() {
         // Cleanup the gpuSceneDataDescriptor
         this->_mainDeletionQueue.push_function(
             [&, this]() { vkDestroyDescriptorSetLayout(this->_device, this->_gpuSceneDataDescriptorLayout, nullptr); });
+    }
+
+    {
+        DescriptorLayoutBuilder builder;
+        this->_singleImageDescriptorLayout = builder.add_bindings(0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
+                                                 .add_bindings(1, VK_DESCRIPTOR_TYPE_SAMPLER)
+                                                 .build(this->_device, VK_SHADER_STAGE_FRAGMENT_BIT);
+
+        this->_mainDeletionQueue.push_function(
+            [&, this]() { vkDestroyDescriptorSetLayout(this->_device, this->_singleImageDescriptorLayout, nullptr); });
     }
 }
 
@@ -406,8 +415,10 @@ void VulkanEngine::init_mesh_pipeline() {
     VkPipelineLayoutCreateInfo pipeline_layout_info = vkinit::pipeline_layout_create_info();
     pipeline_layout_info.pPushConstantRanges = &bufferRange;
     pipeline_layout_info.pushConstantRangeCount = 1;
+    pipeline_layout_info.setLayoutCount = 1;
+    pipeline_layout_info.pSetLayouts = &this->_singleImageDescriptorLayout;
 
-    VK_CHECK(vkCreatePipelineLayout(_device, &pipeline_layout_info, nullptr, &_meshPipelineLayout));
+    VK_CHECK(vkCreatePipelineLayout(this->_device, &pipeline_layout_info, nullptr, &_meshPipelineLayout));
 
     vkutil::PipelineBuilder pipelineBuilder;
     pipelineBuilder._pipelineLayout = this->_meshPipelineLayout;
@@ -566,7 +577,8 @@ void VulkanEngine::init_default_data() {
         this->create_image((void*)&white, VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
     uint32_t grey = glm::packUnorm4x8(glm::vec4(0.66f, 0.66f, 0.66f, 1));
-    this->_greyImage = this->create_image((void*)&grey, VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+    this->_greyImage =
+        this->create_image((void*)&grey, VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
     uint32_t black = glm::packUnorm4x8(glm::vec4(0, 0, 0, 0));
     this->_blackImage =
@@ -897,7 +909,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     VkRenderingInfo renderInfo = vkinit::rendering_info(_drawExtent, &colorAttachment, &depthAttachment);
     vkCmdBeginRendering(cmd, &renderInfo);
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _trianglePipeline);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, this->_trianglePipeline);
 
     // set dynamic viewport and scissor
     VkViewport viewport = {.x = 0,
@@ -918,50 +930,34 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     vkCmdDraw(cmd, 3, 1, 0, 0);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, this->_meshPipeline);
+    VkDescriptorSet imageSet =
+        this->get_current_frame()._frameDescriptors.allocate(this->_device, this->_singleImageDescriptorLayout);
 
-    GPUDrawPushConstants push_constants{.worldMatrix = glm::mat4{1.f}, .vertexBuffer = rectangle.vertexBufferAddress};
+    {
+        DescriptorWriter writer;
+        writer.write_image(0, this->_errorCheckerboardImage.imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                           VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+        writer.write_sampler(1, this->_defaultSamplerNearest);
+        writer.update_set(this->_device, imageSet);
+    }
 
-    vkCmdPushConstants(cmd, this->_meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants),
-                       &push_constants);
-    vkCmdBindIndexBuffer(cmd, this->rectangle.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(cmd, 6, 1, 0, 0, 0);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, this->_meshPipelineLayout, 0, 1, &imageSet, 0,
+                            nullptr);
 
-    // Draw the monkey head
     glm::mat4 view = glm::translate(glm::vec3(0, 0, -5));
     glm::mat4 projection = glm::perspective(
         glm::radians(70.0f), (float)this->_drawExtent.width / (float)this->_drawExtent.height, 10000.f, 0.1f);
-
     projection[1][1] *= -1;
-    push_constants.worldMatrix = projection * view;
 
-    push_constants.vertexBuffer = this->testMeshes[2]->meshBuffers.vertexBufferAddress;
+    GPUDrawPushConstants push_constants{.worldMatrix = glm::mat4{1.f},
+                                        .vertexBuffer = this->testMeshes[2]->meshBuffers.vertexBufferAddress};
+    push_constants.worldMatrix = projection * view;
 
     vkCmdPushConstants(cmd, this->_meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants),
                        &push_constants);
     vkCmdBindIndexBuffer(cmd, this->testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
     vkCmdDrawIndexed(cmd, this->testMeshes[2]->surfaces[0].count, 1, this->testMeshes[2]->surfaces[0].start_index, 0,
                      0);
-
-#if CHAPTER_4
-    // allocate a new uniform buffer for the scene data
-    AllocatedBuffer gpuSceneDataBuffer = this->create_buffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                                             VMA_MEMORY_USAGE_CPU_TO_GPU, "GPU Scene Buffer");
-
-    // add it to the deletion queue of this frame so it gets deleted once its been used
-    this->get_current_frame()._deletionQueue.push_function([=, this]() { this->destroy_buffer(gpuSceneDataBuffer); });
-
-    // write the buffer
-    GPUSceneData* sceneUniformData = (GPUSceneData*)gpuSceneDataBuffer.allocation->GetMappedData();
-    *sceneUniformData = sceneData;
-
-    // create a descriptor set that binds that buffer and update it
-    VkDescriptorSet globalDescriptor =
-        this->get_current_frame()._frameDescriptors.allocate(this->_device, this->_gpuSceneDataDescriptorLayout);
-
-    DescriptorWriter writer;
-    writer.write_buffer(0, gpuSceneDataBuffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    writer.update_set(this->_device, globalDescriptor);
-#endif
 
     vkCmdEndRendering(cmd);
 }
