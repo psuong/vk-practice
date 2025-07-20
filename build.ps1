@@ -48,21 +48,27 @@ if ($type -eq "glsl") {
     }
 } else {
     Write-Host "Compiling slang shaders"
-    foreach ($shader in Get-ChildItem .\shaders -Filter *.slang) {
-        $name = (Get-Item $shader).BaseName;
+
+    Get-ChildItem .\shaders -Filter *.slang | ForEach-Object -Parallel {
+        $shader = $_
+        $name = $shader.BaseName
 
         if ($shader.Name.Contains(".comp")) {
             $target = ".\bin\shaders\$name.spv"
             Write-Host "Compiling Compute Shader: $shader to $target"
             slangc $shader -target spirv -profile cs_6_0 -o $target
         } else {
-            $vert = ".\bin\shaders\$name" + "_vert.spv"
-            Write-Host "Compiling Vertex Shader: $shader to $vert"
-            slangc $shader -target spirv -profile vs_6_0 -entry vert -o $vert
+            if (Select-String -Path $shader -Pattern "[shader(`"vertex`")]" -SimpleMatch -Quiet) {
+                $vert = ".\bin\shaders\$name" + "_vert.spv"
+                Write-Host "Compiling Vertex Shader: $shader to $vert"
+                slangc $shader -target spirv -profile vs_6_0 -entry vert -o $vert
+            }
 
-            $frag = ".\bin\shaders\$name" + "_frag.spv"
-            Write-Host "Compiling Fragment Shader: $shader to $frag"
-            slangc $shader -target spirv -profile ps_6_0 -entry frag -o $frag
+            if (Select-String -Path $shader -Pattern "[shader(`"fragment`")]" -SimpleMatch -Quiet) {
+                $frag = ".\bin\shaders\$name" + "_frag.spv"
+                Write-Host "Compiling Fragment Shader: $shader to $frag"
+                slangc $shader -target spirv -profile ps_6_0 -entry frag -o $frag
+            }
         }
     }
 }

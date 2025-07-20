@@ -3,6 +3,7 @@ struct VSOutput {
     float3 color    : TEXCOORD0;
 };
 
+[shader("vertex")]
 VSOutput vert(uint vertexID : SV_VertexID) {
     float3 positions[3] = {
         float3( 1.0f,  1.0f, 0.0f),
@@ -22,6 +23,7 @@ VSOutput vert(uint vertexID : SV_VertexID) {
     return output;
 }
 
+[shader("fragment")]
 float4 frag(float3 color : TEXCOORD0) : SV_Target {
     return float4(color, 1.0f);
 }

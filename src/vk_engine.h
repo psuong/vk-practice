@@ -52,6 +52,16 @@ struct FrameData {
     VkFence _renderFence;
 
     DeletionQueue _deletionQueue;
+    DescriptorAllocatorGrowable _frameDescriptors;
+};
+
+struct GPUSceneData {
+    glm::mat4 view;
+    glm::mat4 proj;
+    glm::mat4 viewproj;
+    glm::vec4 ambientColor;
+    glm::vec4 sunlightDirection; // w for sun power
+    glm::vec4 sunlightColor;
 };
 
 class VulkanEngine {
@@ -135,6 +145,17 @@ class VulkanEngine {
     VkPipeline _meshPipeline;
 
     GPUMeshBuffers rectangle;
+    GPUSceneData sceneData;
+    VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
+    VkDescriptorSetLayout _singleImageDescriptorLayout;
+
+    AllocatedImage _whiteImage;
+    AllocatedImage _blackImage;
+    AllocatedImage _greyImage;
+    AllocatedImage _errorCheckerboardImage;
+
+    VkSampler _defaultSamplerLinear;
+    VkSampler _defaultSamplerNearest;
 
     std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 
@@ -165,4 +186,9 @@ class VulkanEngine {
                                   const char* name);
     void destroy_buffer(const AllocatedBuffer& buffer);
     void resize_swapchain();
+
+    AllocatedImage create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+    AllocatedImage create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage,
+                                bool mipmapped = false);
+    void destroy_image(const AllocatedImage& img);
 };
