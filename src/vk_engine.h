@@ -8,6 +8,7 @@
 #include "vk_descriptors.h"
 #include "vk_loader.h"
 #include "vk_mem_alloc.h"
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <span>
@@ -64,6 +65,55 @@ struct GPUSceneData {
     glm::vec4 sunlightColor;
 };
 
+struct RenderObject {
+    uint32_t index_count;
+    uint32_t first_index;
+    VkBuffer index_buffer;
+
+    MaterialInstance* material;
+    glm::mat4 transform;
+    VkDeviceAddress vertex_buffer_address;
+};
+
+struct DrawContext {
+    std::vector<RenderObject> OpaqueSurfaces;
+};
+
+class IRenderable {
+    virtual void Draw(const glm::mat4& top_matrix, DrawContext& ctx) = 0;
+};
+
+struct GLTFMetallic_Roughness {
+    MaterialPipeline opaquePipeline;
+    MaterialPipeline transparentPipeline;
+
+    VkDescriptorSetLayout materialLayout;
+
+    struct MaterialConstants {
+        glm::vec4 colorFactors;
+        glm::vec4 metal_rough_factors;
+        // padding, we need it anyway for uniform buffers
+        glm::vec4 extra[14];
+    };
+
+    struct MaterialResources {
+        AllocatedImage colorImage;
+        VkSampler colorSampler;
+        AllocatedImage metalRoughImage;
+        VkSampler metalRoughSampler;
+        VkBuffer dataBuffer;
+        uint32_t dataBufferOffset;
+    };
+
+    DescriptorWriter writer;
+
+    void build_pipelines(VulkanEngine* engine);
+    void clear_resources(VkDevice device);
+
+    MaterialInstance write_material(VkDevice device, MaterialPass pass, const MaterialResources& resources,
+                                    DescriptorAllocatorGrowable& descriptorAllocator);
+};
+
 class VulkanEngine {
   public:
     bool _isInitialized{false};
@@ -113,12 +163,14 @@ class VulkanEngine {
     };
 
     GPUMeshBuffers upload_mesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
+    VkDevice _device;                         // Vulkan device for commands
+    
+    VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
 
   private:
     VkInstance _instance;                     // Vulkan library handle
     VkDebugUtilsMessengerEXT _debugMessenger; // Vulkan debug output handle
     VkPhysicalDevice _chosenGPU;              // GPU chosen as the default device
-    VkDevice _device;                         // Vulkan device for commands
     VkSurfaceKHR _surface;                    // Vulkan window surface
 
     VkSwapchainKHR _swapchain;
@@ -146,7 +198,6 @@ class VulkanEngine {
 
     GPUMeshBuffers rectangle;
     GPUSceneData sceneData;
-    VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
     VkDescriptorSetLayout _singleImageDescriptorLayout;
 
     AllocatedImage _whiteImage;

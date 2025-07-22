@@ -2,6 +2,8 @@
 // or project specific include files.
 #pragma once
 
+#include "glm/ext/matrix_float4x4.hpp"
+#include "vk_descriptors.h"
 #include <array>
 #include <deque>
 #include <functional>
@@ -19,6 +21,7 @@
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
+#include <vulkan/vulkan_core.h>
 
 template <> struct fmt::formatter<VkResult> {
     constexpr auto parse(fmt::format_parse_context& ctx) {
@@ -54,6 +57,23 @@ struct GPUMeshBuffers {
 struct GPUDrawPushConstants {
     glm::mat4 worldMatrix;
     VkDeviceAddress vertexBuffer;
+};
+
+enum class MaterialPass : uint8_t {
+    MainColor,
+    Transparent,
+    Other
+};
+
+struct MaterialPipeline {
+    VkPipeline pipeline;
+    VkPipelineLayout layout;
+};
+
+struct MaterialInstance {
+    MaterialInstance* pipeline;
+    VkDescriptorSet material_set;
+    MaterialPass pass_type;
 };
 
 #define VK_CHECK(x)                                                                                                    \

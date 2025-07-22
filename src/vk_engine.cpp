@@ -1,8 +1,10 @@
 ﻿//> includes
 #include "SDL_video.h"
+#include "fmt/core.h"
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/vector_float3.hpp"
 #include "glm/gtx/transform.hpp"
+#include "vk_descriptors.h"
 #include "vk_loader.h"
 #include <array>
 #include <cmath>
@@ -1176,4 +1178,38 @@ AllocatedImage VulkanEngine::create_image(void* data, VkExtent3D size, VkFormat 
 void VulkanEngine::destroy_image(const AllocatedImage& img) {
     vkDestroyImageView(_device, img.imageView, nullptr);
     vmaDestroyImage(_allocator, img.image, img.allocation);
+}
+
+void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine) {
+    VkShaderModule meshFragShader;
+
+    char buffer[MAX_PATH];
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "../../mesh_frag.spv"), engine->_device,
+                                    &meshFragShader)) {
+        fmt::println("Error when building the triangle fragment shader module!");
+    }
+
+    VkShaderModule meshVertexShader;
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "../../mesh_vert.spv"), engine->_device,
+                                    &meshFragShader)) {
+        fmt::println("Error when building the triangle fragment shader module!");
+    }
+
+    VkPushConstantRange matrixRange{
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .offset = 0,
+        .size = sizeof(GPUDrawPushConstants),
+    };
+
+    DescriptorLayoutBuilder layoutBuilder;
+    layoutBuilder.add_bindings(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    layoutBuilder.add_bindings(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    layoutBuilder.add_bindings(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+    this->materialLayout = layoutBuilder.build(engine->_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+
+    VkDescriptorSetLayout layouts[] = { engine->_gpuSceneDataDescriptorLayout, this->materialLayout };
+
+    VkPipelineLayoutCreateInfo mesh_layout_info = vkinit::pipeline_layout_create_info();
+    // TODO: Finish the mesh layout
 }
