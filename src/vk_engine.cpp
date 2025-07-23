@@ -1203,13 +1203,49 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine) {
 
     DescriptorLayoutBuilder layoutBuilder;
     layoutBuilder.add_bindings(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    // TODO: Bind them separately
     layoutBuilder.add_bindings(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     layoutBuilder.add_bindings(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-    this->materialLayout = layoutBuilder.build(engine->_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    this->materialLayout =
+        layoutBuilder.build(engine->_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    VkDescriptorSetLayout layouts[] = { engine->_gpuSceneDataDescriptorLayout, this->materialLayout };
+    VkDescriptorSetLayout layouts[] = {engine->_gpuSceneDataDescriptorLayout, this->materialLayout};
 
     VkPipelineLayoutCreateInfo mesh_layout_info = vkinit::pipeline_layout_create_info();
-    // TODO: Finish the mesh layout
+    mesh_layout_info.setLayoutCount = 2;
+    mesh_layout_info.pSetLayouts = layouts;
+    mesh_layout_info.pPushConstantRanges = &matrixRange;
+    mesh_layout_info.pushConstantRangeCount = 1;
+
+    VkPipelineLayout newLayout;
+    VK_CHECK(vkCreatePipelineLayout(engine->_device, &mesh_layout_info, nullptr, &newLayout));
+
+    opaquePipeline.layout = newLayout;
+    transparentPipeline.layout = newLayout;
+
+    // build the stage-create-info for both vertex and fragment stages. This lets the pipeline know the shader modules
+    // per stage
+    vkutil::PipelineBuilder pipelineBuilder;
+    pipelineBuilder.set_shaders(meshVertexShader, meshFragShader)
+        .set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
+        .set_polygon_mode(VK_POLYGON_MODE_FILL)
+        .set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
+        .set_multisampling_none()
+        .disable_blending()
+        .enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL)
+        .set_color_attachment_format(engine->_drawImage.imageFormat)
+        .set_depth_format(engine->_depthImage.imageFormat);
+
+    pipelineBuilder._pipelineLayout = newLayout;
+
+    opaquePipeline.pipeline = pipelineBuilder.build_pipeline(engine->_device, "Opaque");
+
+    // Create the transparent values
+    transparentPipeline.pipeline = pipelineBuilder.enable_blending_additive()
+                                       .enable_depthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL)
+                                       .build_pipeline(engine->_device, "Transparent");
+
+    vkDestroyShaderModule(engine->_device, meshFragShader, nullptr);
+    vkDestroyShaderModule(engine->_device, meshVertexShader, nullptr);
 }

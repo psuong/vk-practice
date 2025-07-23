@@ -167,6 +167,9 @@ class VulkanEngine {
     
     VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
 
+    AllocatedImage _drawImage;
+    AllocatedImage _depthImage;
+
   private:
     VkInstance _instance;                     // Vulkan library handle
     VkDebugUtilsMessengerEXT _debugMessenger; // Vulkan debug output handle
@@ -182,8 +185,6 @@ class VulkanEngine {
 
     DeletionQueue _mainDeletionQueue;
     VmaAllocator _allocator;
-    AllocatedImage _drawImage;
-    AllocatedImage _depthImage;
     VkExtent2D _drawExtent;
     float renderScale = 1.f;
 
