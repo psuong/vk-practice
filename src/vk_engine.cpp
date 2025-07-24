@@ -329,6 +329,7 @@ void VulkanEngine::init_descriptors() {
 
     {
         DescriptorLayoutBuilder builder;
+        // TODO: Change the SAMPLED_IMAGE type
         this->_singleImageDescriptorLayout = builder.add_bindings(0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
                                                  .add_bindings(1, VK_DESCRIPTOR_TYPE_SAMPLER)
                                                  .build(this->_device, VK_SHADER_STAGE_FRAGMENT_BIT);

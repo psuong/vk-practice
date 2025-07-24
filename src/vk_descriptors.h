@@ -2,6 +2,7 @@
 
 #include <span>
 #include <vector>
+#include <deque>
 #include <vk_types.h>
 #include <vulkan/vulkan_core.h>
 
