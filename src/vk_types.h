@@ -71,7 +71,7 @@ struct MaterialPipeline {
 };
 
 struct MaterialInstance {
-    MaterialInstance* pipeline;
+    MaterialPipeline* pipeline;
     VkDescriptorSet material_set;
     MaterialPass pass_type;
 };

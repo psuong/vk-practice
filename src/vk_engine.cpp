@@ -276,9 +276,9 @@ void VulkanEngine::init_sync_structures() {
 
 void VulkanEngine::init_descriptors() {
     // Create a descriptor pool that will hold 10 sets with 1 image each
-    std::vector<DescriptorAllocator::PoolSizeRatio> sizes = {{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1}};
+    std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes = {{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1}};
 
-    this->globalDescriptorAllocator.init_pool(this->_device, 10, sizes);
+    this->globalDescriptorAllocator.init(this->_device, 10, sizes);
 
     // Make the descriptor set layout for our compute draw, bind to the first
     // layer
@@ -297,7 +297,7 @@ void VulkanEngine::init_descriptors() {
 
     // Clean up the descriptor allocator and new layout
     this->_mainDeletionQueue.push_function([&, this]() {
-        this->globalDescriptorAllocator.destroy_pool(this->_device);
+        this->globalDescriptorAllocator.destroy_pools(this->_device);
         vkDestroyDescriptorSetLayout(this->_device, this->_drawImageDescriptorLayout, nullptr);
     });
 
@@ -343,6 +343,8 @@ void VulkanEngine::init_pipelines() {
     this->init_background_pipelines();
     this->init_triangle_pipeline();
     this->init_mesh_pipeline();
+
+    this->metalRoughMaterial.build_pipelines(this);
 }
 
 void VulkanEngine::init_triangle_pipeline() {
@@ -618,6 +620,29 @@ void VulkanEngine::init_default_data() {
         this->destroy_image(this->_blackImage);
         this->destroy_image(this->_errorCheckerboardImage);
     });
+
+    GLTFMetallic_Roughness::MaterialResources materialResources{.colorImage = this->_whiteImage,
+                                                                .colorSampler = this->_defaultSamplerLinear,
+                                                                .metalRoughImage = this->_whiteImage,
+                                                                .metalRoughSampler = this->_defaultSamplerLinear};
+
+    AllocatedBuffer materialConstants =
+        this->create_buffer(sizeof(GLTFMetallic_Roughness), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                            VMA_MEMORY_USAGE_CPU_TO_GPU, "GLTF Metallic Roughness Buffer");
+
+    // Write to the buffer
+    GLTFMetallic_Roughness::MaterialConstants* sceneUniformData =
+        (GLTFMetallic_Roughness::MaterialConstants*)materialConstants.allocation->GetMappedData();
+    sceneUniformData->colorFactors = glm::vec4{1, 1, 1, 1};
+    sceneUniformData->metal_rough_factors = glm::vec4{1, 0.5, 0, 0};
+
+    this->_mainDeletionQueue.push_function([=, this]() {
+        this->destroy_buffer(materialConstants);
+    });
+
+    materialResources.dataBuffer = materialConstants.buffer;
+    materialResources.dataBufferOffset = 0;
+    this->defaultData = metalRoughMaterial.write_material(this->_device, MaterialPass::MainColor, materialResources, this->globalDescriptorAllocator);
 }
 
 void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
@@ -1185,15 +1210,15 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine) {
     VkShaderModule meshFragShader;
 
     char buffer[MAX_PATH];
-    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "../../mesh_frag.spv"), engine->_device,
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\default_frag.spv"), engine->_device,
                                     &meshFragShader)) {
         fmt::println("Error when building the triangle fragment shader module!");
     }
 
     VkShaderModule meshVertexShader;
-    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "../../mesh_vert.spv"), engine->_device,
-                                    &meshFragShader)) {
-        fmt::println("Error when building the triangle fragment shader module!");
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\default_vert.spv"), engine->_device,
+                                    &meshVertexShader)) {
+        fmt::println("Error when building the triangle vertex shader module!");
     }
 
     VkPushConstantRange matrixRange{
@@ -1249,4 +1274,29 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine) {
 
     vkDestroyShaderModule(engine->_device, meshFragShader, nullptr);
     vkDestroyShaderModule(engine->_device, meshVertexShader, nullptr);
+}
+
+MaterialInstance GLTFMetallic_Roughness::write_material(VkDevice device, MaterialPass pass,
+                                                        const MaterialResources& resources,
+                                                        DescriptorAllocatorGrowable& descriptorAllocator) {
+    MaterialInstance matData;
+    matData.pass_type = pass;
+    if (pass == MaterialPass::Transparent) {
+        matData.pipeline = &transparentPipeline;
+    } else {
+        matData.pipeline = &opaquePipeline;
+    }
+
+    matData.material_set = descriptorAllocator.allocate(device, materialLayout);
+
+    writer.clear();
+    writer.write_buffer(0, resources.dataBuffer, sizeof(MaterialConstants), resources.dataBufferOffset,
+                        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    writer.write_image(1, resources.colorImage.imageView, resources.colorSampler,
+                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    writer.write_image(2, resources.metalRoughImage.imageView, resources.metalRoughSampler,
+                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+    writer.update_set(device, matData.material_set);
+    return matData;
 }

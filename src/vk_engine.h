@@ -131,7 +131,7 @@ class VulkanEngine {
 
     static VulkanEngine& Get();
 
-    DescriptorAllocator globalDescriptorAllocator;
+    DescriptorAllocatorGrowable globalDescriptorAllocator;
 
     VkDescriptorSet _drawImageDescriptors;
     VkDescriptorSetLayout _drawImageDescriptorLayout;
@@ -169,6 +169,9 @@ class VulkanEngine {
 
     AllocatedImage _drawImage;
     AllocatedImage _depthImage;
+
+    MaterialInstance defaultData;
+    GLTFMetallic_Roughness metalRoughMaterial;
 
   private:
     VkInstance _instance;                     // Vulkan library handle
