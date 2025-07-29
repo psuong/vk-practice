@@ -12,6 +12,7 @@
 #include <functional>
 #include <memory>
 #include <span>
+#include <unordered_map>
 #include <vk_types.h>
 #include <vulkan/vulkan_core.h>
 
@@ -75,14 +76,6 @@ struct RenderObject {
     VkDeviceAddress vertex_buffer_address;
 };
 
-struct DrawContext {
-    std::vector<RenderObject> OpaqueSurfaces;
-};
-
-class IRenderable {
-    virtual void Draw(const glm::mat4& top_matrix, DrawContext& ctx) = 0;
-};
-
 struct GLTFMetallic_Roughness {
     MaterialPipeline opaquePipeline;
     MaterialPipeline transparentPipeline;
@@ -112,6 +105,17 @@ struct GLTFMetallic_Roughness {
 
     MaterialInstance write_material(VkDevice device, MaterialPass pass, const MaterialResources& resources,
                                     DescriptorAllocatorGrowable& descriptorAllocator);
+};
+
+struct DrawContext {
+    std::vector<RenderObject> OpaqueSurfaces;
+};
+
+struct MeshNode : public Node {
+    std::shared_ptr<MeshAsset> mesh;
+
+  public:
+    virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
 };
 
 class VulkanEngine {
@@ -163,8 +167,8 @@ class VulkanEngine {
     };
 
     GPUMeshBuffers upload_mesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
-    VkDevice _device;                         // Vulkan device for commands
-    
+    VkDevice _device; // Vulkan device for commands
+
     VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
 
     AllocatedImage _drawImage;
@@ -172,6 +176,11 @@ class VulkanEngine {
 
     MaterialInstance defaultData;
     GLTFMetallic_Roughness metalRoughMaterial;
+
+    DrawContext mainDrawContext;
+    std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
+
+    void update_scene();
 
   private:
     VkInstance _instance;                     // Vulkan library handle
