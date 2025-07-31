@@ -1287,7 +1287,8 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine) {
 
 void GLTFMetallic_Roughness::clear_resources(VkDevice device) {
     vkDestroyDescriptorSetLayout(device, this->materialLayout, nullptr);
-    vkDestroyPipelineLayout(device, this->opaquePipeline.layout, nullptr);
+
+    fmt::println("Destroying transparent pipeline");
     vkDestroyPipelineLayout(device, this->transparentPipeline.layout, nullptr);
 
     vkDestroyPipeline(device, this->transparentPipeline.pipeline, nullptr);
