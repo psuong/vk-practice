@@ -44,7 +44,8 @@ VSOutput vert(uint vertexID : SV_VertexID, [[vk::push_constant]] uniform PushCon
 [shader("fragment")]
 float4 frag(VSOutput input) : SV_Target {
     float lightValue = max(dot(input.normal, sceneData.sunlightDirection.xyz), 0.1f);
-    float3 color = input.color * colorTexture.Sample(colorSampler, input.uv).xyz;
+    float3 color = input.color * colorTexture.Sample(input.uv).xyz;
+    // float3 color = input.color * colorTexture.Sample(colorSampler, input.uv).xyz;
     float3 ambient = color * sceneData.ambientColor.xyz;
     return float4(color * lightValue * sceneData.sunlightColor.w + ambient, 1.0f);
 }

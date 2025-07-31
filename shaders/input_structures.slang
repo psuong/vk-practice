@@ -12,18 +12,25 @@ struct GLTFMaterialData {
     float4 metal_rough_factors;
 };
 
+// x: set, y: binding
 [[vk::binding(0, 0)]]
 ConstantBuffer<SceneData> sceneData;
 
-[[vk::binding(1, 0)]]
+[[vk::binding(0, 1)]]
 ConstantBuffer<GLTFMaterialData> materialData;
 
 [[vk::binding(1, 1)]]
-Texture2D colorTexture;
-[[vk::binding(1, 2)]]
-SamplerState colorSampler;
+Sampler2D colorTexture;
 
-[[vk::binding(1, 3)]]
-Texture2D metalRoughTex;
-[[vk::binding(1, 4)]]
-SamplerState metalRoughSampler;
+[[vk::binding(1, 2)]]
+Sampler2D metalRoughTex;
+
+// [[vk::binding(1, 1)]]
+// Texture2D colorTexture;
+// [[vk::binding(1, 2)]]
+// SamplerState colorSampler;
+
+// [[vk::binding(1, 3)]]
+// Texture2D metalRoughTex;
+// [[vk::binding(1, 4)]]
+// SamplerState metalRoughSampler;

@@ -276,37 +276,52 @@ void VulkanEngine::init_sync_structures() {
 
 void VulkanEngine::init_descriptors() {
     // Create a descriptor pool that will hold 10 sets with 1 image each
-    std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes = {{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1}};
+    std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes = {{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1},
+                                                                     {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}};
 
     this->globalDescriptorAllocator.init(this->_device, 10, sizes);
-
-    // Make the descriptor set layout for our compute draw, bind to the first
-    // layer
-    DescriptorLayoutBuilder builder;
-    builder = builder.add_bindings(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-    this->_drawImageDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_COMPUTE_BIT);
-
+    {
+        // Make the descriptor set layout for our compute draw, bind to the first layer
+        DescriptorLayoutBuilder builder;
+        this->_drawImageDescriptorLayout =
+            builder.add_bindings(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE).build(this->_device, VK_SHADER_STAGE_COMPUTE_BIT);
+    }
+    {
+        DescriptorLayoutBuilder builder;
+        this->_singleImageDescriptorLayout = builder.add_bindings(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
+                                                 .build(this->_device, VK_SHADER_STAGE_FRAGMENT_BIT);
+    }
+    {
+        DescriptorLayoutBuilder builder;
+        this->_gpuSceneDataDescriptorLayout =
+            builder.add_bindings(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
+                .build(this->_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    }
     // Allocate a descriptor for our draw image
     this->_drawImageDescriptors =
         this->globalDescriptorAllocator.allocate(this->_device, this->_drawImageDescriptorLayout);
-
-    DescriptorWriter writer;
-    writer.write_image(0, this->_drawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL,
-                       VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-    writer.update_set(this->_device, this->_drawImageDescriptors);
+    {
+        DescriptorWriter writer;
+        writer.write_image(0, this->_drawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL,
+                           VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+        writer.update_set(this->_device, this->_drawImageDescriptors);
+    }
 
     // Clean up the descriptor allocator and new layout
     this->_mainDeletionQueue.push_function([&, this]() {
         this->globalDescriptorAllocator.destroy_pools(this->_device);
         vkDestroyDescriptorSetLayout(this->_device, this->_drawImageDescriptorLayout, nullptr);
+        vkDestroyDescriptorSetLayout(this->_device, this->_singleImageDescriptorLayout, nullptr);
+        vkDestroyDescriptorSetLayout(this->_device, this->_gpuSceneDataDescriptorLayout, nullptr);
     });
 
     for (int i = 0; i < FRAME_OVERLAP; i++) {
         // create a descriptor pool
         std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> frame_sizes = {
-            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3},  {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
-            {VK_DESCRIPTOR_TYPE_SAMPLER, 4},        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 4},
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
         };
 
         this->_frames[i]._frameDescriptors = DescriptorAllocatorGrowable{};
@@ -314,28 +329,6 @@ void VulkanEngine::init_descriptors() {
 
         this->_mainDeletionQueue.push_function(
             [&, i, this]() { this->_frames[i]._frameDescriptors.destroy_pools(this->_device); });
-    }
-
-    {
-        DescriptorLayoutBuilder builder;
-        this->_gpuSceneDataDescriptorLayout =
-            builder.add_bindings(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
-                .build(this->_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-
-        // Cleanup the gpuSceneDataDescriptor
-        this->_mainDeletionQueue.push_function(
-            [&, this]() { vkDestroyDescriptorSetLayout(this->_device, this->_gpuSceneDataDescriptorLayout, nullptr); });
-    }
-
-    {
-        DescriptorLayoutBuilder builder;
-        // TODO: Change the SAMPLED_IMAGE type
-        this->_singleImageDescriptorLayout = builder.add_bindings(0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
-                                                 .add_bindings(1, VK_DESCRIPTOR_TYPE_SAMPLER)
-                                                 .build(this->_device, VK_SHADER_STAGE_FRAGMENT_BIT);
-
-        this->_mainDeletionQueue.push_function(
-            [&, this]() { vkDestroyDescriptorSetLayout(this->_device, this->_singleImageDescriptorLayout, nullptr); });
     }
 }
 
@@ -945,11 +938,10 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     // begin a render pass  connected to our draw image
     VkRenderingAttachmentInfo colorAttachment =
         vkinit::attachment_info(this->_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
     VkRenderingAttachmentInfo depthAttachment =
         vkinit::depth_attachment_info(this->_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
-    VkRenderingInfo renderInfo = vkinit::rendering_info(_drawExtent, &colorAttachment, &depthAttachment);
+    VkRenderingInfo renderInfo = vkinit::rendering_info(this->_drawExtent, &colorAttachment, &depthAttachment);
     vkCmdBeginRendering(cmd, &renderInfo);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, this->_trianglePipeline);
@@ -965,15 +957,15 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     vkCmdSetViewport(cmd, 0, 1, &viewport);
 
     VkRect2D scissor = {.offset = VkOffset2D{.x = 0, .y = 0},
-                        .extent = VkExtent2D{.width = this->_drawExtent.width, .height = this->_drawExtent.height}};
+                        .extent = VkExtent2D{.width = (uint32_t)viewport.width, .height = (uint32_t)viewport.height}};
 
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
     // launch a draw command to draw 3 vertices
     vkCmdDraw(cmd, 3, 1, 0, 0);
 
-    AllocatedBuffer gpuSceneDataBuffer = create_buffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                                       VMA_MEMORY_USAGE_CPU_TO_GPU, "GPU Scene Data");
+    AllocatedBuffer gpuSceneDataBuffer = this->create_buffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                                             VMA_MEMORY_USAGE_CPU_TO_GPU, "GPU Scene Data");
 
     this->get_current_frame()._deletionQueue.push_function([=, this]() { this->destroy_buffer(gpuSceneDataBuffer); });
 
@@ -994,7 +986,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->layout, 0, 1,
                                 &globalDescriptor, 0, nullptr);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->layout, 1, 1,
-                                &draw.material->materialSet, 0, nullptr);
+                                &draw.material->material_set, 0, nullptr);
 
         vkCmdBindIndexBuffer(cmd, draw.index_buffer, 0, VK_INDEX_TYPE_UINT32);
 
@@ -1007,36 +999,6 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
 
         vkCmdDrawIndexed(cmd, draw.index_count, 1, draw.first_index, 0, 0);
     }
-
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, this->_meshPipeline);
-    VkDescriptorSet imageSet =
-        this->get_current_frame()._frameDescriptors.allocate(this->_device, this->_singleImageDescriptorLayout);
-
-    {
-        DescriptorWriter writer;
-        writer.write_image(0, this->_errorCheckerboardImage.imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                           VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
-        writer.write_sampler(1, this->_defaultSamplerNearest);
-        writer.update_set(this->_device, imageSet);
-    }
-
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, this->_meshPipelineLayout, 0, 1, &imageSet, 0,
-                            nullptr);
-
-    glm::mat4 view = glm::translate(glm::vec3(0, 0, -5));
-    glm::mat4 projection = glm::perspective(
-        glm::radians(70.0f), (float)this->_drawExtent.width / (float)this->_drawExtent.height, 10000.f, 0.1f);
-    projection[1][1] *= -1;
-
-    GPUDrawPushConstants push_constants{.worldMatrix = glm::mat4{1.f},
-                                        .vertexBuffer = this->testMeshes[2]->meshBuffers.vertexBufferAddress};
-    push_constants.worldMatrix = projection * view;
-
-    vkCmdPushConstants(cmd, this->_meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants),
-                       &push_constants);
-    vkCmdBindIndexBuffer(cmd, this->testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(cmd, this->testMeshes[2]->surfaces[0].count, 1, this->testMeshes[2]->surfaces[0].start_index, 0,
-                     0);
 
     vkCmdEndRendering(cmd);
 }

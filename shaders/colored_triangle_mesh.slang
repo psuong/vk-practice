@@ -25,8 +25,8 @@ inline Ptr<VertexBuffer> get_vertex_buffer(uint64_t address) {
     return (VertexBuffer*)address;
 }
 
-Texture2D displayTexture;
-SamplerState displaySampler;
+[[vk::binding(0, 0)]]
+Sampler2D displayTexture;
 
 [shader("vertex")]
 VSOutput vert(uint vertexID : SV_VERTEXID, [[vk::push_constant]] uniform PushConstants pc) {
@@ -43,5 +43,5 @@ VSOutput vert(uint vertexID : SV_VERTEXID, [[vk::push_constant]] uniform PushCon
 
 [shader("fragment")]
 float4 frag(VSOutput input) : SV_Target {
-    return displayTexture.Sample(displaySampler, input.uv);
+    return displayTexture.Sample(input.uv);
 }
