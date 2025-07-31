@@ -758,7 +758,7 @@ void VulkanEngine::cleanup() {
         this->_mainDeletionQueue.flush();
 
         // Perform all of the clean up operations
-        destroy_swapchain();
+        this->destroy_swapchain();
 
         vkDestroySurfaceKHR(this->_instance, this->_surface, nullptr);
         fmt::println("Destroying device");
@@ -1238,7 +1238,6 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine) {
 
     DescriptorLayoutBuilder layoutBuilder;
     layoutBuilder.add_bindings(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    // TODO: Bind them separately
     layoutBuilder.add_bindings(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     layoutBuilder.add_bindings(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
@@ -1309,8 +1308,6 @@ MaterialInstance GLTFMetallic_Roughness::write_material(VkDevice device, Materia
     matData.material_set = descriptorAllocator.allocate(device, this->materialLayout);
 
     writer.clear();
-    fmt::println("MaterialConstants: {}", sizeof(MaterialConstants));
-
     writer.write_buffer(0, resources.dataBuffer, sizeof(MaterialConstants), resources.dataBufferOffset,
                         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     writer.write_image(1, resources.colorImage.imageView, resources.colorSampler,
@@ -1341,11 +1338,21 @@ void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx) {
 
 void VulkanEngine::update_scene() {
     this->mainDrawContext.OpaqueSurfaces.clear();
-    this->loadedNodes["Suzanne"]->Draw(glm::mat4{1.f}, this->mainDrawContext);
+
+    for (auto& m : this->loadedNodes) {
+        m.second->Draw(glm::mat4{1.f}, this->mainDrawContext);
+    }
+
+    for (int x = -3; x < 3; x++) {
+        glm::mat4 scale = glm::scale(glm::vec3{0.2});
+        glm::mat4 translation = glm::translate(glm::vec3{x, 1, 0});
+
+        loadedNodes["Cube"]->Draw(translation * scale, this->mainDrawContext);
+    }
 
     this->sceneData.view = glm::translate(glm::vec3{0, 0, -5});
     this->sceneData.proj = glm::perspective(
-        glm::radians(70.f), (float)this->_windowExtent.width / (float)this->_windowExtent.height, 1000.0f, 0.1f);
+        glm::radians(70.f), (float)this->_windowExtent.width / (float)this->_windowExtent.height, 0.1f, 1000.f);
 
     this->sceneData.proj[1][1] *= -1;
     this->sceneData.viewproj = this->sceneData.proj * this->sceneData.view;

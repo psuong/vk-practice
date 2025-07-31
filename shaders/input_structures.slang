@@ -24,13 +24,3 @@ Sampler2D colorTexture;
 
 [[vk::binding(1, 2)]]
 Sampler2D metalRoughTex;
-
-// [[vk::binding(1, 1)]]
-// Texture2D colorTexture;
-// [[vk::binding(1, 2)]]
-// SamplerState colorSampler;
-
-// [[vk::binding(1, 3)]]
-// Texture2D metalRoughTex;
-// [[vk::binding(1, 4)]]
-// SamplerState metalRoughSampler;
