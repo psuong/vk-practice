@@ -34,7 +34,7 @@ VSOutput vert(uint vertexID : SV_VertexID, [[vk::push_constant]] uniform PushCon
     var buffer = get_vertex_buffer(pc.vertex_buffer_address);
     var v = buffer->vertices[vertexID];
 
-    output.position = mul(pc.render_matrix, float4(v.position, 1));
+    output.position = mul(pc.render_matrix, float4(v.position, 1.0));
     output.color = v.color * materialData.colorFactors.xyz;
     output.uv = float2(v.uv_x, v.uv_y);
 
