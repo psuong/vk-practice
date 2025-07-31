@@ -754,6 +754,7 @@ void VulkanEngine::cleanup() {
             this->destroy_buffer(mesh->meshBuffers.vertexBuffer);
         }
 
+        metalRoughMaterial.clear_resources(this->_device);
         this->_mainDeletionQueue.flush();
 
         // Perform all of the clean up operations
@@ -788,8 +789,9 @@ void VulkanEngine::draw() {
     // When acquiring the image from the swapchain, we request an available one.
     // We have a timeout to wait until the next image is available if there is
     // none available.
-    VkResult err = vkAcquireNextImageKHR(this->_device, this->_swapchain, 1000000000, this->get_current_frame()._swapchainSemaphore,
-                                         VK_NULL_HANDLE, &swapchainImageIndex);
+    VkResult err =
+        vkAcquireNextImageKHR(this->_device, this->_swapchain, 1000000000,
+                              this->get_current_frame()._swapchainSemaphore, VK_NULL_HANDLE, &swapchainImageIndex);
 
     if (err == VK_ERROR_OUT_OF_DATE_KHR) {
         return;
@@ -859,12 +861,12 @@ void VulkanEngine::draw() {
 
     // Need to wait until the presentSemaphore (this will tell us that the
     // swapchain is ready)
-    VkSemaphoreSubmitInfo waitInfo =
-        vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, this->get_current_frame()._swapchainSemaphore);
+    VkSemaphoreSubmitInfo waitInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                                                   this->get_current_frame()._swapchainSemaphore);
 
     // The render semaphore signals that the rendering finished
-    VkSemaphoreSubmitInfo signalInfo =
-        vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR, this->get_current_frame()._renderSemaphore);
+    VkSemaphoreSubmitInfo signalInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR,
+                                                                     this->get_current_frame()._renderSemaphore);
 
     // Submit the command buffer to the queue and execute it
     VkSubmitInfo2 submit = vkinit::submit_info(&cmdInfo, &signalInfo, &waitInfo);
@@ -1281,6 +1283,15 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine) {
 
     vkDestroyShaderModule(engine->_device, meshFragShader, nullptr);
     vkDestroyShaderModule(engine->_device, meshVertexShader, nullptr);
+}
+
+void GLTFMetallic_Roughness::clear_resources(VkDevice device) {
+    vkDestroyDescriptorSetLayout(device, this->materialLayout, nullptr);
+    vkDestroyPipelineLayout(device, this->opaquePipeline.layout, nullptr);
+    vkDestroyPipelineLayout(device, this->transparentPipeline.layout, nullptr);
+
+    vkDestroyPipeline(device, this->transparentPipeline.pipeline, nullptr);
+    vkDestroyPipeline(device, this->opaquePipeline.pipeline, nullptr);
 }
 
 MaterialInstance GLTFMetallic_Roughness::write_material(VkDevice device, MaterialPass pass,
