@@ -501,7 +501,8 @@ void VulkanEngine::init_background_pipelines() {
 
     if (vkCreateComputePipelines(this->_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr,
                                  &gradient.pipeline) == VK_SUCCESS) {
-        utils::set_pipeline_debug_name(this->_device, (uint64_t)gradient.pipeline, VK_OBJECT_TYPE_PIPELINE, "gradient");
+        utils::set_vk_object_debug_name(this->_device, (uint64_t)gradient.pipeline, VK_OBJECT_TYPE_PIPELINE,
+                                        "gradient");
     }
 
     computePipelineCreateInfo.stage.module = skyShader;
@@ -512,7 +513,7 @@ void VulkanEngine::init_background_pipelines() {
     if (vkCreateComputePipelines(this->_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr,
                                  &sky.pipeline) == VK_SUCCESS) {
         fmt::println("Sky pipeline created");
-        utils::set_pipeline_debug_name(this->_device, (uint64_t)sky.pipeline, VK_OBJECT_TYPE_PIPELINE, "sky");
+        utils::set_vk_object_debug_name(this->_device, (uint64_t)sky.pipeline, VK_OBJECT_TYPE_PIPELINE, "sky");
     }
 
     this->backgroundEffects.push_back(gradient);
@@ -620,7 +621,7 @@ void VulkanEngine::init_default_data() {
                                                                 .metalRoughSampler = this->_defaultSamplerLinear};
 
     AllocatedBuffer materialConstants =
-        this->create_buffer(sizeof(GLTFMetallic_Roughness), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        this->create_buffer(sizeof(GLTFMetallic_Roughness::MaterialConstants), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                             VMA_MEMORY_USAGE_CPU_TO_GPU, "GLTF Metallic Roughness Buffer");
 
     // Write to the buffer
@@ -774,29 +775,23 @@ void VulkanEngine::cleanup() {
 void VulkanEngine::draw() {
     this->update_scene();
 
-    FrameData& frameData = get_current_frame();
-
-    VK_CHECK(vkWaitForFences(this->_device, 1, &frameData._renderFence, true, 1000000000));
-
+    VK_CHECK(vkWaitForFences(this->_device, 1, &this->get_current_frame()._renderFence, true, 1000000000));
     // Flush the deletion queue
-    frameData._deletionQueue.flush();
-    frameData._frameDescriptors.clear_pools(this->_device);
-
-    VkDevice device = this->_device;
+    this->get_current_frame()._deletionQueue.flush();
+    this->get_current_frame()._frameDescriptors.clear_pools(this->_device);
 
     // Wait until the GPU finished rendering the last frame, with a timeout of 1
     // second
-    VK_CHECK(vkWaitForFences(device, 1, &frameData._renderFence, true, 1000000000));
+    VK_CHECK(vkWaitForFences(this->_device, 1, &this->get_current_frame()._renderFence, true, 1000000000));
 
     uint32_t swapchainImageIndex;
     // When acquiring the image from the swapchain, we request an available one.
     // We have a timeout to wait until the next image is available if there is
     // none available.
-    VkResult err = vkAcquireNextImageKHR(device, this->_swapchain, 1000000000, frameData._swapchainSemaphore,
+    VkResult err = vkAcquireNextImageKHR(this->_device, this->_swapchain, 1000000000, this->get_current_frame()._swapchainSemaphore,
                                          VK_NULL_HANDLE, &swapchainImageIndex);
 
     if (err == VK_ERROR_OUT_OF_DATE_KHR) {
-        resize_requested = true;
         return;
     }
 
@@ -804,9 +799,9 @@ void VulkanEngine::draw() {
     this->_drawExtent.height =
         min(this->_swapchainExtent.height, this->_drawImage.imageExtent.height) * this->renderScale;
 
-    VK_CHECK(vkResetFences(device, 1, &frameData._renderFence));
+    VK_CHECK(vkResetFences(this->_device, 1, &this->get_current_frame()._renderFence));
 
-    VkCommandBuffer cmd = frameData._mainCommandBuffer;
+    VkCommandBuffer cmd = this->get_current_frame()._mainCommandBuffer;
     // Ensure that our cmd buffer is resetted
     VK_CHECK(vkResetCommandBuffer(cmd, 0));
 
@@ -865,17 +860,17 @@ void VulkanEngine::draw() {
     // Need to wait until the presentSemaphore (this will tell us that the
     // swapchain is ready)
     VkSemaphoreSubmitInfo waitInfo =
-        vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, frameData._swapchainSemaphore);
+        vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, this->get_current_frame()._swapchainSemaphore);
 
     // The render semaphore signals that the rendering finished
     VkSemaphoreSubmitInfo signalInfo =
-        vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR, frameData._renderSemaphore);
+        vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR, this->get_current_frame()._renderSemaphore);
 
     // Submit the command buffer to the queue and execute it
     VkSubmitInfo2 submit = vkinit::submit_info(&cmdInfo, &signalInfo, &waitInfo);
 
     // Block the render fence until the graphics commands finish executing
-    VK_CHECK(vkQueueSubmit2(this->_graphicsQueue, 1, &submit, frameData._renderFence));
+    VK_CHECK(vkQueueSubmit2(this->_graphicsQueue, 1, &submit, this->get_current_frame()._renderFence));
 
     // Present the image
 
@@ -886,7 +881,7 @@ void VulkanEngine::draw() {
     presentInfo.swapchainCount = 1;
 
     // we have a wait semaphore
-    presentInfo.pWaitSemaphores = &frameData._renderSemaphore;
+    presentInfo.pWaitSemaphores = &this->get_current_frame()._renderSemaphore;
     presentInfo.waitSemaphoreCount = 1;
 
     presentInfo.pImageIndices = &swapchainImageIndex;
@@ -975,11 +970,9 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     VkDescriptorSet globalDescriptor =
         this->get_current_frame()._frameDescriptors.allocate(this->_device, this->_gpuSceneDataDescriptorLayout);
 
-    {
-        DescriptorWriter writer;
-        writer.write_buffer(0, gpuSceneDataBuffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        writer.update_set(this->_device, globalDescriptor);
-    }
+    DescriptorWriter writer;
+    writer.write_buffer(0, gpuSceneDataBuffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    writer.update_set(this->_device, globalDescriptor);
 
     for (const RenderObject& draw : this->mainDrawContext.OpaqueSurfaces) {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->pipeline);
@@ -1073,18 +1066,18 @@ AllocatedBuffer VulkanEngine::create_buffer(size_t allocSize, VkBufferUsageFlags
         .usage = memoryUsage,
     };
 
-    AllocatedBuffer newBuffer;
+    AllocatedBuffer newBuffer{.name = name};
     VK_CHECK(vmaCreateBuffer(this->_allocator, &bufferInfo, &vmaAllocInfo, &newBuffer.buffer, &newBuffer.allocation,
                              &newBuffer.info));
 
-    VkDebugUtilsObjectNameInfoEXT nameInfo{.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-                                           .objectType = VK_OBJECT_TYPE_BUFFER,
-                                           .objectHandle = (uint64_t)newBuffer.buffer,
-                                           .pObjectName = name};
+    utils::set_vk_object_debug_name(this->_device, (uint64_t)newBuffer.buffer, VK_OBJECT_TYPE_BUFFER, name);
     return newBuffer;
 }
 
 void VulkanEngine::destroy_buffer(const AllocatedBuffer& buffer) {
+#if PRINT
+    fmt::println("Destroying buffer: {} at address: {:#016x}", buffer.name, (uint64_t)buffer.buffer);
+#endif
     vmaDestroyBuffer(this->_allocator, buffer.buffer, buffer.allocation);
 }
 
@@ -1094,20 +1087,21 @@ GPUMeshBuffers VulkanEngine::upload_mesh(std::span<uint32_t> indices, std::span<
 
     GPUMeshBuffers newSurface;
 
-    newSurface.vertexBuffer = create_buffer(vertexBufferSize,
-                                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                                                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                            VMA_MEMORY_USAGE_GPU_ONLY, "vertex_buffer");
+    newSurface.vertexBuffer =
+        this->create_buffer(vertexBufferSize,
+                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                            VMA_MEMORY_USAGE_GPU_ONLY, "vertex_buffer");
     VkBufferDeviceAddressInfo deviceAddressInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
                                                 .buffer = newSurface.vertexBuffer.buffer};
     newSurface.vertexBufferAddress = vkGetBufferDeviceAddress(this->_device, &deviceAddressInfo);
 
     newSurface.indexBuffer =
-        create_buffer(indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                      VMA_MEMORY_USAGE_GPU_ONLY, "index_buffer");
+        this->create_buffer(indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                            VMA_MEMORY_USAGE_GPU_ONLY, "index_buffer");
 
-    AllocatedBuffer staging = create_buffer(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                            VMA_MEMORY_USAGE_CPU_ONLY, "staging_buffer");
+    AllocatedBuffer staging = this->create_buffer(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                                  VMA_MEMORY_USAGE_CPU_ONLY, "staging_buffer");
 
     void* data = staging.allocation->GetMappedData();
     memcpy(data, vertices.data(), vertexBufferSize);
@@ -1300,17 +1294,19 @@ MaterialInstance GLTFMetallic_Roughness::write_material(VkDevice device, Materia
         matData.pipeline = &opaquePipeline;
     }
 
-    matData.material_set = descriptorAllocator.allocate(device, materialLayout);
+    matData.material_set = descriptorAllocator.allocate(device, this->materialLayout);
 
     writer.clear();
+    fmt::println("MaterialConstants: {}", sizeof(MaterialConstants));
+
     writer.write_buffer(0, resources.dataBuffer, sizeof(MaterialConstants), resources.dataBufferOffset,
                         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     writer.write_image(1, resources.colorImage.imageView, resources.colorSampler,
                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     writer.write_image(2, resources.metalRoughImage.imageView, resources.metalRoughSampler,
                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-
     writer.update_set(device, matData.material_set);
+
     return matData;
 }
 

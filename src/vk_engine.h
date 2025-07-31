@@ -163,7 +163,7 @@ class VulkanEngine {
     void run();
 
     FrameData& get_current_frame() {
-        return _frames[_frameNumber % FRAME_OVERLAP];
+        return this->_frames[this->_frameNumber % FRAME_OVERLAP];
     };
 
     GPUMeshBuffers upload_mesh(std::span<uint32_t> indices, std::span<Vertex> vertices);

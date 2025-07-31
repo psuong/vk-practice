@@ -126,7 +126,7 @@ VkPipeline vkutil::PipelineBuilder::build_pipeline(VkDevice device, const char* 
         fmt::println("Failed to create pipeline");
         return VK_NULL_HANDLE;
     } else {
-        utils::set_pipeline_debug_name(device, (uint64_t)newPipeline, VK_OBJECT_TYPE_PIPELINE, pipelineName);
+        utils::set_vk_object_debug_name(device, (uint64_t)newPipeline, VK_OBJECT_TYPE_PIPELINE, pipelineName);
         return newPipeline;
     }
 }

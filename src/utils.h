@@ -18,7 +18,7 @@ inline const char* get_relative_path(char* buffer, size_t bufferSize, const char
     return buffer;
 }
 
-inline void set_pipeline_debug_name(VkDevice device, uint64_t objectHandle, VkObjectType objectType, const char* name) {
+inline void set_vk_object_debug_name(VkDevice device, uint64_t objectHandle, VkObjectType objectType, const char* name) {
     PFN_vkSetDebugUtilsObjectNameEXT func =
         (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
     if (func) {

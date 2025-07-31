@@ -183,7 +183,7 @@ VkDescriptorSet DescriptorAllocatorGrowable::allocate(VkDevice device, VkDescrip
 
 void DescriptorWriter::write_buffer(int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type) {
     VkDescriptorBufferInfo& info =
-        bufferInfos.emplace_back(VkDescriptorBufferInfo{.buffer = buffer, .offset = offset, .range = size});
+        this->bufferInfos.emplace_back(VkDescriptorBufferInfo{.buffer = buffer, .offset = offset, .range = size});
 
     VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
 
@@ -198,8 +198,9 @@ void DescriptorWriter::write_buffer(int binding, VkBuffer buffer, size_t size, s
 
 void DescriptorWriter::write_image(int binding, VkImageView image, VkSampler sampler, VkImageLayout layout,
                                    VkDescriptorType type) {
-    VkDescriptorImageInfo& info =
-        imageInfos.emplace_back(VkDescriptorImageInfo{.sampler = sampler, .imageView = image, .imageLayout = layout});
+
+    VkDescriptorImageInfo& info = this->imageInfos.emplace_back(
+        VkDescriptorImageInfo{.sampler = sampler, .imageView = image, .imageLayout = layout});
 
     VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
 
@@ -212,33 +213,33 @@ void DescriptorWriter::write_image(int binding, VkImageView image, VkSampler sam
     writes.push_back(write);
 }
 
-void DescriptorWriter::write_image(int binding, VkImageView image, VkImageLayout layout, VkDescriptorType type) {
-    VkDescriptorImageInfo& info =
-        imageInfos.emplace_back(VkDescriptorImageInfo{.imageView = image, .imageLayout = layout});
-
-    VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-
-    write.dstBinding = binding;
-    write.dstSet = VK_NULL_HANDLE; // left empty for now until we need to write it
-    write.descriptorCount = 1;
-    write.descriptorType = type;
-    write.pImageInfo = &info;
-
-    writes.push_back(write);
-}
-
-void DescriptorWriter::write_sampler(int binding, VkSampler sampler) {
-    VkDescriptorImageInfo& info = imageInfos.emplace_back(VkDescriptorImageInfo{.sampler = sampler});
-
-    VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-    write.dstBinding = binding;
-    write.dstSet = VK_NULL_HANDLE;
-    write.descriptorCount = 1;
-    write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-    write.pImageInfo = &info;
-
-    writes.push_back(write);
-}
+// void DescriptorWriter::write_image(int binding, VkImageView image, VkImageLayout layout, VkDescriptorType type) {
+//     VkDescriptorImageInfo& info =
+//         imageInfos.emplace_back(VkDescriptorImageInfo{.imageView = image, .imageLayout = layout});
+//
+//     VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+//
+//     write.dstBinding = binding;
+//     write.dstSet = VK_NULL_HANDLE; // left empty for now until we need to write it
+//     write.descriptorCount = 1;
+//     write.descriptorType = type;
+//     write.pImageInfo = &info;
+//
+//     writes.push_back(write);
+// }
+//
+// void DescriptorWriter::write_sampler(int binding, VkSampler sampler) {
+//     VkDescriptorImageInfo& info = imageInfos.emplace_back(VkDescriptorImageInfo{.sampler = sampler});
+//
+//     VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+//     write.dstBinding = binding;
+//     write.dstSet = VK_NULL_HANDLE;
+//     write.descriptorCount = 1;
+//     write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+//     write.pImageInfo = &info;
+//
+//     writes.push_back(write);
+// }
 
 void DescriptorWriter::clear() {
     imageInfos.clear();

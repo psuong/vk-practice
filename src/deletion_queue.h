@@ -21,5 +21,6 @@ struct DeletionQueue {
         for (auto it = this->deleters.rbegin(); it != this->deleters.rend(); it++) {
             (*it)(); // Call the functor
         }
+        this->deleters.clear();
     }
 };

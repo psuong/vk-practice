@@ -30,6 +30,7 @@ struct AllocatedBuffer {
     VkBuffer buffer;
     VmaAllocation allocation;
     VmaAllocationInfo info;
+    std::string name;
 };
 
 // Somewhere we need to interweave for a better GPU format? Is there a way I can inspect this?
