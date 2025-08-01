@@ -877,10 +877,7 @@ void VulkanEngine::draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView) 
 }
 
 void VulkanEngine::draw_background(VkCommandBuffer cmd) {
-    VkClearColorValue clearValue;
-    float flash = std::abs(std::sin(this->_frameNumber / 120.f));
-    clearValue = {{0.0f, 0.0f, flash, 1.0f}};
-
+    VkClearColorValue clearValue = {{0.0f, 0.0f, 0.0f, 1.0f}};
     VkImageSubresourceRange clearRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
     vkCmdClearColorImage(cmd, this->_drawImage.image, VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &clearRange);
 

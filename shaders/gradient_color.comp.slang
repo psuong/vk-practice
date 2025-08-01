@@ -21,7 +21,7 @@ void main(uint3 globalID : SV_DispatchThreadID) {
     float4 top_color = pushConstants.data1;
     float4 bottom_color = pushConstants.data2;
 
-    if (texel_coord.x < size.x && texel_coord.y < texel_coord.y) {
+    if (texel_coord.x < size.x && texel_coord.y < size.y) {
         float blend = float(texel_coord.y) / float(size.y);
         image[texel_coord] = lerp(top_color, bottom_color, blend);
     }
