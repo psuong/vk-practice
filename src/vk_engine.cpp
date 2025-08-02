@@ -1216,13 +1216,13 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine) {
     VkShaderModule meshFragShader;
 
     char buffer[MAX_PATH];
-    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\mesh_frag_frag.spv"),
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\default_frag.spv"),
                                     engine->_device, &meshFragShader)) {
         fmt::println("Error when building the triangle fragment shader module!");
     }
 
     VkShaderModule meshVertexShader;
-    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\mesh_vert_vert.spv"),
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\default_vert.spv"),
                                     engine->_device, &meshVertexShader)) {
         fmt::println("Error when building the triangle vertex shader module!");
     }
