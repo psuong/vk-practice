@@ -64,6 +64,12 @@ void VulkanEngine::init() {
     this->init_imgui();
     this->init_default_data();
 
+    char buffer[MAX_PATH];
+    std::string structurePath = utils::get_relative_path(buffer, MAX_PATH, "assets\\structure.glb");
+    auto structureFile = loadGLTF(this, structurePath);
+    assert(structureFile.has_value());
+    this->loadedScenes["structure"] = *structureFile;
+
     // everything went fine
     _isInitialized = true;
 }
@@ -538,7 +544,7 @@ void VulkanEngine::init_background_pipelines() {
 
 void VulkanEngine::init_default_data() {
     this->mainCamera.velocity = glm::vec3(0.f);
-    this->mainCamera.position = glm::vec3(0, 0, 5);
+    this->mainCamera.position = glm::vec3(30.f, -00.f, -085.f);
 
     this->mainCamera.pitch = 0;
     this->mainCamera.yaw = 0;
@@ -740,6 +746,7 @@ void VulkanEngine::init_imgui() {
 void VulkanEngine::cleanup() {
     if (_isInitialized) {
         vkDeviceWaitIdle(this->_device);
+        this->loadedScenes.clear();
 
         // Free the command pool
         for (int i = 0; i < FRAME_OVERLAP; i++) {
@@ -1350,22 +1357,23 @@ void VulkanEngine::update_scene() {
     this->sceneData.view = view;
     this->sceneData.proj = proj;
     this->sceneData.viewproj = proj * view;
-
-    this->mainDrawContext.OpaqueSurfaces.clear();
-
-    for (auto& m : this->loadedNodes) {
-        m.second->Draw(glm::mat4{1.f}, this->mainDrawContext);
-    }
-
-    for (int x = -3; x < 3; x++) {
-        glm::mat4 scale = glm::scale(glm::vec3{0.2});
-        glm::mat4 translation = glm::translate(glm::vec3{x, 1, 0});
-
-        loadedNodes["Cube"]->Draw(translation * scale, this->mainDrawContext);
-    }
-
     // some default lighting parameters
     this->sceneData.ambientColor = glm::vec4(.1f);
     this->sceneData.sunlightColor = glm::vec4(1.f);
     this->sceneData.sunlightDirection = glm::vec4(0, 1, 0.5, 1.f);
+
+    this->mainDrawContext.OpaqueSurfaces.clear();
+
+    // for (auto& m : this->loadedNodes) {
+    //     m.second->Draw(glm::mat4{1.f}, this->mainDrawContext);
+    // }
+
+    // for (int x = -3; x < 3; x++) {
+    //     glm::mat4 scale = glm::scale(glm::vec3{0.2});
+    //     glm::mat4 translation = glm::translate(glm::vec3{x, 1, 0});
+
+    //     loadedNodes["Cube"]->Draw(translation * scale, this->mainDrawContext);
+    // }
+
+    this->loadedScenes["structure"]->Draw(glm::mat4{1.f}, this->mainDrawContext);
 }

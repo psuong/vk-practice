@@ -19,14 +19,6 @@
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
-struct AllocatedImage {
-    VkImage image;
-    VkImageView imageView;
-    VmaAllocation allocation;
-    VkExtent3D imageExtent;
-    VkFormat imageFormat;
-};
-
 struct ComputePushConstants {
     glm::vec4 data1;
     glm::vec4 data2;
@@ -181,8 +173,19 @@ class VulkanEngine {
 
     DrawContext mainDrawContext;
     std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
+    std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
 
     void update_scene();
+
+    AllocatedImage _whiteImage;
+    AllocatedImage _blackImage;
+    AllocatedImage _greyImage;
+    AllocatedImage _errorCheckerboardImage;
+
+    AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage,
+                                  const char* name);
+    VkSampler _defaultSamplerLinear;
+    VkSampler _defaultSamplerNearest;
 
   private:
     VkInstance _instance;                     // Vulkan library handle
@@ -215,14 +218,6 @@ class VulkanEngine {
     GPUSceneData sceneData;
     VkDescriptorSetLayout _singleImageDescriptorLayout;
 
-    AllocatedImage _whiteImage;
-    AllocatedImage _blackImage;
-    AllocatedImage _greyImage;
-    AllocatedImage _errorCheckerboardImage;
-
-    VkSampler _defaultSamplerLinear;
-    VkSampler _defaultSamplerNearest;
-
     std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 
     bool resize_requested;
@@ -248,8 +243,6 @@ class VulkanEngine {
     void draw_background(VkCommandBuffer cmd);
     void draw_geometry(VkCommandBuffer cmd);
 
-    AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage,
-                                  const char* name);
     void destroy_buffer(const AllocatedBuffer& buffer);
     void resize_swapchain();
 

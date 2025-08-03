@@ -26,6 +26,14 @@ template <> struct fmt::formatter<VkResult> {
     }
 };
 
+struct AllocatedImage {
+    VkImage image;
+    VkImageView imageView;
+    VmaAllocation allocation;
+    VkExtent3D imageExtent;
+    VkFormat imageFormat;
+};
+
 struct AllocatedBuffer {
     VkBuffer buffer;
     VmaAllocation allocation;
