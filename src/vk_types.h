@@ -35,11 +35,11 @@ struct AllocatedBuffer {
 
 // Somewhere we need to interweave for a better GPU format? Is there a way I can inspect this?
 struct Vertex {
-    glm::vec3 position;
-    float uv_x;
-    glm::vec3 normal;
-    float uv_y;
-    glm::vec4 color;
+    glm::vec3 position; // 12
+    float uv_x; // 4
+    glm::vec3 normal; // 12
+    float uv_y; // 4
+    glm::vec4 color; // 12
 };
 
 struct GPUMeshBuffers {

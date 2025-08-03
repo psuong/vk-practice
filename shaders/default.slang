@@ -8,11 +8,11 @@ struct VSOutput {
 };
 
 struct Vertex {
-    float3 position;
-    float uv_x;
-    float3 normal;
-    float uv_y;
-    float3 color;
+    float3 position; // 12
+    float  uv_x; // 4
+    float3 normal; // 12
+    float  uv_y; // 4
+    float4 color; // 16
 };
 
 struct VertexBuffer {
@@ -25,7 +25,7 @@ struct PushConstants {
 };
 
 inline Ptr<VertexBuffer> get_vertex_buffer(uint64_t address) {
-    return (VertexBuffer*)address;
+    return (Ptr<VertexBuffer>)address;
 }
 
 [shader("vertex")]
@@ -33,10 +33,9 @@ VSOutput vert(uint vertexID : SV_VertexID, [[vk::push_constant]] uniform PushCon
     var output = (VSOutput)0;
     var buffer = get_vertex_buffer(pc.vertex_buffer_address);
     var v = buffer->vertices[vertexID];
-    // var v = pc.vertexBuffer.vertices[vertexID];
 
-    output.position = mul(pc.render_matrix, float4(v.position, 1.0));
-    output.color = v.color * materialData.colorFactors.xyz;
+    output.position = mul(mul(sceneData.viewProj, pc.render_matrix), float4(v.position.xyz, 1.0));
+    output.color = v.color.xyz * materialData.colorFactors.xyz;
     output.uv = float2(v.uv_x, v.uv_y);
 
     return output;
@@ -46,7 +45,6 @@ VSOutput vert(uint vertexID : SV_VertexID, [[vk::push_constant]] uniform PushCon
 float4 frag(VSOutput input) : SV_Target {
     float lightValue = max(dot(input.normal, sceneData.sunlightDirection.xyz), 0.1f);
     float3 color = input.color * colorTexture.Sample(input.uv).xyz;
-    // float3 color = input.color * colorTexture.Sample(colorSampler, input.uv).xyz;
     float3 ambient = color * sceneData.ambientColor.xyz;
     return float4(color * lightValue * sceneData.sunlightColor.w + ambient, 1.0f);
 }
