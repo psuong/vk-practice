@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "camera.h"
 #include "deletion_queue.h"
 #include "glm/ext/vector_float4.hpp"
 #include "vk_descriptors.h"
@@ -120,6 +121,7 @@ struct MeshNode : public Node {
 
 class VulkanEngine {
   public:
+    Camera mainCamera;
     bool _isInitialized{false};
     int _frameNumber{0};
     bool stop_rendering{false};
