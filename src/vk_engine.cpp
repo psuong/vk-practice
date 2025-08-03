@@ -537,6 +537,12 @@ void VulkanEngine::init_background_pipelines() {
 }
 
 void VulkanEngine::init_default_data() {
+    this->mainCamera.velocity = glm::vec3(0.f);
+    this->mainCamera.position = glm::vec3(0, 0, 5);
+
+    this->mainCamera.pitch = 0;
+    this->mainCamera.yaw = 0;
+
     std::array<Vertex, 4> rect_vertices;
     rect_vertices[0].position = {0.5, -0.5, 0};
     rect_vertices[1].position = {0.5, 0.5, 0};
@@ -1015,7 +1021,7 @@ void VulkanEngine::run() {
                     stop_rendering = false;
                 }
             }
-
+            this->mainCamera.processSDLEvent(e);
             // Send sdl events to imgui
             ImGui_ImplSDL2_ProcessEvent(&e);
         }
@@ -1216,13 +1222,13 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine) {
     VkShaderModule meshFragShader;
 
     char buffer[MAX_PATH];
-    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\mesh_frag_frag.spv"),
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\default_frag.spv"),
                                     engine->_device, &meshFragShader)) {
         fmt::println("Error when building the triangle fragment shader module!");
     }
 
     VkShaderModule meshVertexShader;
-    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\mesh_vert_vert.spv"),
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\default_vert.spv"),
                                     engine->_device, &meshVertexShader)) {
         fmt::println("Error when building the triangle vertex shader module!");
     }
@@ -1334,6 +1340,17 @@ void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx) {
 }
 
 void VulkanEngine::update_scene() {
+    this->mainCamera.update();
+
+    glm::mat4 view = mainCamera.getViewMatrix();
+    glm::mat4 proj = glm::perspective(
+        glm::radians(70.f), (float)this->_windowExtent.width / (float)this->_windowExtent.height, 0.1f, 1000.f);
+
+    proj[1][1] *= -1;
+    this->sceneData.view = view;
+    this->sceneData.proj = proj;
+    this->sceneData.viewproj = proj * view;
+
     this->mainDrawContext.OpaqueSurfaces.clear();
 
     for (auto& m : this->loadedNodes) {
@@ -1346,13 +1363,6 @@ void VulkanEngine::update_scene() {
 
         loadedNodes["Cube"]->Draw(translation * scale, this->mainDrawContext);
     }
-
-    this->sceneData.view = glm::translate(glm::vec3{0, 0, -5});
-    this->sceneData.proj = glm::perspective(
-        glm::radians(70.f), (float)this->_windowExtent.width / (float)this->_windowExtent.height, 0.1f, 1000.f);
-
-    this->sceneData.proj[1][1] *= -1;
-    this->sceneData.viewproj = this->sceneData.proj * this->sceneData.view;
 
     // some default lighting parameters
     this->sceneData.ambientColor = glm::vec4(.1f);
