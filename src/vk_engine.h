@@ -102,6 +102,7 @@ struct GLTFMetallic_Roughness {
 
 struct DrawContext {
     std::vector<RenderObject> OpaqueSurfaces;
+    std::vector<RenderObject> TransparentSurfaces;
 };
 
 struct MeshNode : public Node {
@@ -182,10 +183,16 @@ class VulkanEngine {
     AllocatedImage _greyImage;
     AllocatedImage _errorCheckerboardImage;
 
-    AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage,
-                                  const char* name);
     VkSampler _defaultSamplerLinear;
     VkSampler _defaultSamplerNearest;
+
+    AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage,
+                                  const char* name);
+    AllocatedImage create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+    AllocatedImage create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage,
+                                bool mipmapped = false);
+    void destroy_buffer(const AllocatedBuffer& buffer);
+    void destroy_image(const AllocatedImage& img);
 
   private:
     VkInstance _instance;                     // Vulkan library handle
@@ -243,11 +250,5 @@ class VulkanEngine {
     void draw_background(VkCommandBuffer cmd);
     void draw_geometry(VkCommandBuffer cmd);
 
-    void destroy_buffer(const AllocatedBuffer& buffer);
     void resize_swapchain();
-
-    AllocatedImage create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
-    AllocatedImage create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage,
-                                bool mipmapped = false);
-    void destroy_image(const AllocatedImage& img);
 };

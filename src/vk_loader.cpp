@@ -1,5 +1,12 @@
-﻿#include "stb_image.h"
+﻿#ifndef STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#endif
+
+#include "stb_image.h"
+#include "fastgltf/types.hpp"
+#include <cassert>
 #include <iostream>
+#include <optional>
 #include <vk_loader.h>
 
 #include "vk_engine.h"
@@ -10,6 +17,7 @@
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/parser.hpp>
 #include <fastgltf/tools.hpp>
+#include <vulkan/vulkan_core.h>
 
 VkFilter extract_filter(fastgltf::Filter filter) {
     switch (filter) {
@@ -116,10 +124,15 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::s
     std::vector<std::shared_ptr<GLTFMaterial>> materials;
     // < Create the temporal arrays
     // > Load the textures
-
-    // load all textures
     for (fastgltf::Image& image : gltf.images) {
-        images.push_back(engine->_errorCheckerboardImage);
+        std::optional<AllocatedImage> img = load_image(engine, gltf, image);
+
+        if (img.has_value()) {
+            images.push_back(*img);
+        } else {
+            images.push_back(engine->_errorCheckerboardImage);
+            fmt::println("Failed to load the gltf texture {}", image.name);
+        }
     }
     // < Load the textures
 
@@ -322,10 +335,29 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::s
             node->refreshTransform(glm::mat4{1.f});
         }
     }
+    // > Load the nodes
     return scene;
 }
 
 void LoadedGLTF::clearAll() {
+    VkDevice dv = this->creator->_device;
+    this->descriptorPool.destroy_pools(dv);
+    this->creator->destroy_buffer(this->materialDataBuffer);
+    for (auto& [k, v] : meshes) {
+        this->creator->destroy_buffer(v->meshBuffers.indexBuffer);
+        this->creator->destroy_buffer(v->meshBuffers.vertexBuffer);
+    }
+
+    for (auto& [k, v] : images) {
+        if (v.image == this->creator->_errorCheckerboardImage.image) {
+            continue;
+        }
+        this->creator->destroy_image(v);
+    }
+
+    for (auto& sampler : samplers) {
+        vkDestroySampler(dv, sampler, nullptr);
+    }
 }
 
 void LoadedGLTF::Draw(const glm::mat4& topMatrix, DrawContext& ctx) {
@@ -447,4 +479,60 @@ std::optional<std::vector<std::shared_ptr<MeshAsset>>> loadGltfMeshes(VulkanEngi
     }
 
     return meshes;
+}
+
+std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image) {
+    int width, height, nrChannels;
+    AllocatedImage newImage{};
+
+    std::visit(fastgltf::visitor{
+                   [](auto& arg) {},
+                   [&](fastgltf::sources::URI& filePath) {
+                       assert(filePath.fileByteOffset == 0);
+                       assert(filePath.uri.isLocalPath());
+
+                       const std::string path(filePath.uri.path().begin(), filePath.uri.path().end());
+                       unsigned char* data = stbi_load(path.c_str(), &width, &height, &nrChannels, 4);
+                       if (data) {
+                           VkExtent3D imageSize{.width = (uint32_t)width, .height = (uint32_t)height, .depth = 1};
+                           newImage = engine->create_image(data, imageSize, VK_FORMAT_R8G8B8A8_UNORM,
+                                                           VK_IMAGE_USAGE_SAMPLED_BIT, false);
+                           stbi_image_free(data);
+                       }
+                   },
+                   [&](fastgltf::sources::Vector& vector) {
+                       unsigned char* data = stbi_load_from_memory(
+                           vector.bytes.data(), static_cast<int>(vector.bytes.size()), &width, &height, &nrChannels, 4);
+                       if (data) {
+                           VkExtent3D imageSize{.width = (uint32_t)width, .height = (uint32_t)height, .depth = 1};
+                           newImage = engine->create_image(imageSize, VK_FORMAT_R8G8B8A8_UNORM,
+                                                           VK_IMAGE_USAGE_SAMPLED_BIT, false);
+                           stbi_image_free(data);
+                       }
+                   },
+                   [&](fastgltf::sources::BufferView& view) {
+                       auto& bufferView = asset.bufferViews[view.bufferViewIndex];
+                       auto& buffer = asset.buffers[bufferView.bufferIndex];
+                       std::visit(fastgltf::visitor{
+                                      [](auto& arg) {},
+                                      [&](fastgltf::sources::Vector& vector) {
+                                          unsigned char* data = stbi_load_from_memory(
+                                              vector.bytes.data() + bufferView.byteOffset,
+                                              static_cast<int>(bufferView.byteLength), &width, &height, &nrChannels, 4);
+                                          if (data) {
+                                              VkExtent3D imageSize{
+                                                  .width = (uint32_t)width, .height = (uint32_t)height, .depth = 1};
+                                              newImage = engine->create_image(imageSize, VK_FORMAT_R8G8B8A8_UNORM,
+                                                                              VK_IMAGE_USAGE_SAMPLED_BIT, false);
+                                              stbi_image_free(data);
+                                          }
+                                      }},
+                                  buffer.data);
+                   }},
+               image.data);
+
+    if (newImage.image == VK_NULL_HANDLE) {
+        return {};
+    }
+    return newImage;
 }

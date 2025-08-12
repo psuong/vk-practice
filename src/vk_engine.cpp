@@ -71,7 +71,7 @@ void VulkanEngine::init() {
     this->loadedScenes["structure"] = *structureFile;
 
     // everything went fine
-    _isInitialized = true;
+    this->_isInitialized = true;
 }
 
 void VulkanEngine::init_vulkan() {
@@ -649,18 +649,18 @@ void VulkanEngine::init_default_data() {
     this->defaultData = metalRoughMaterial.write_material(this->_device, MaterialPass::MainColor, materialResources,
                                                           this->globalDescriptorAllocator);
 
-    for (auto& m : this->testMeshes) {
-        std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
-        newNode->mesh = m;
-        newNode->localTransform = glm::mat4{1.f};
-        newNode->worldTransform = glm::mat4{1.f};
+    // for (auto& m : this->testMeshes) {
+    //     std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
+    //     newNode->mesh = m;
+    //     newNode->localTransform = glm::mat4{1.f};
+    //     newNode->worldTransform = glm::mat4{1.f};
 
-        for (auto& s : newNode->mesh->surfaces) {
-            s.material = std::make_shared<GLTFMaterial>(defaultData);
-        }
+    //     for (auto& s : newNode->mesh->surfaces) {
+    //         s.material = std::make_shared<GLTFMaterial>(defaultData);
+    //     }
 
-        this->loadedNodes[m->name] = std::move(newNode);
-    }
+    //     this->loadedNodes[m->name] = std::move(newNode);
+    // }
 }
 
 void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function) {
@@ -969,7 +969,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
     // launch a draw command to draw 3 vertices
-    vkCmdDraw(cmd, 3, 1, 0, 0);
+    // vkCmdDraw(cmd, 3, 1, 0, 0);
 
     AllocatedBuffer gpuSceneDataBuffer = this->create_buffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                                              VMA_MEMORY_USAGE_CPU_TO_GPU, "GPU Scene Data");
@@ -986,7 +986,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     writer.write_buffer(0, gpuSceneDataBuffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     writer.update_set(this->_device, globalDescriptor);
 
-    for (const RenderObject& draw : this->mainDrawContext.OpaqueSurfaces) {
+    auto draw = [&, this](const RenderObject& draw) {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->pipeline);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.material->pipeline->layout, 0, 1,
                                 &globalDescriptor, 0, nullptr);
@@ -1003,6 +1003,14 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
                            sizeof(GPUDrawPushConstants), &pushConstants);
 
         vkCmdDrawIndexed(cmd, draw.index_count, 1, draw.first_index, 0, 0);
+    };
+
+    for (auto& r : this->mainDrawContext.OpaqueSurfaces) {
+        draw(r);
+    }
+
+    for (auto& r : this->mainDrawContext.TransparentSurfaces) {
+        draw(r);
     }
 
     vkCmdEndRendering(cmd);
@@ -1363,6 +1371,7 @@ void VulkanEngine::update_scene() {
     this->sceneData.sunlightDirection = glm::vec4(0, 1, 0.5, 1.f);
 
     this->mainDrawContext.OpaqueSurfaces.clear();
+    this->mainDrawContext.TransparentSurfaces.clear();
 
     // for (auto& m : this->loadedNodes) {
     //     m.second->Draw(glm::mat4{1.f}, this->mainDrawContext);
