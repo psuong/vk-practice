@@ -938,7 +938,7 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd) {
 
     // Execute the compute pipeline dispatch. We are using 16x16
     // workgroup size so we need to divide by it
-    vkCmdDispatch(cmd, std::ceil(this->_drawExtent.width / 16.0), std::ceil(this->_drawExtent.height / 16.0), 1);
+    // vkCmdDispatch(cmd, std::ceil(this->_drawExtent.width / 16.0), std::ceil(this->_drawExtent.height / 16.0), 1);
 }
 
 void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
@@ -1372,17 +1372,5 @@ void VulkanEngine::update_scene() {
 
     this->mainDrawContext.OpaqueSurfaces.clear();
     this->mainDrawContext.TransparentSurfaces.clear();
-
-    // for (auto& m : this->loadedNodes) {
-    //     m.second->Draw(glm::mat4{1.f}, this->mainDrawContext);
-    // }
-
-    // for (int x = -3; x < 3; x++) {
-    //     glm::mat4 scale = glm::scale(glm::vec3{0.2});
-    //     glm::mat4 translation = glm::translate(glm::vec3{x, 1, 0});
-
-    //     loadedNodes["Cube"]->Draw(translation * scale, this->mainDrawContext);
-    // }
-
     this->loadedScenes["structure"]->Draw(glm::mat4{1.f}, this->mainDrawContext);
 }
