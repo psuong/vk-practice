@@ -19,6 +19,14 @@
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
+struct EngineStats {
+    float frametime;
+    int triangle_count;
+    int drawcall_count;
+    float scene_update_time;
+    float mesh_draw_time;
+};
+
 struct ComputePushConstants {
     glm::vec4 data1;
     glm::vec4 data2;
@@ -119,6 +127,7 @@ class VulkanEngine {
     int _frameNumber{0};
     bool stop_rendering{false};
     VkExtent2D _windowExtent{1600, 900};
+    EngineStats stats;
 
     // Forward declaration without having to include the SDL header
     struct SDL_Window* _window{nullptr};
