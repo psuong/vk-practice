@@ -4,3 +4,4 @@
 *.spv
 *.ini
 debug.rdbg
+.vscode/
