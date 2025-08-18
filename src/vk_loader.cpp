@@ -352,8 +352,6 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGLTF(VulkanEngine* engine, std::s
 
 void LoadedGLTF::clearAll() {
     VkDevice dv = this->creator->_device;
-    this->descriptorPool.destroy_pools(dv);
-    this->creator->destroy_buffer(this->materialDataBuffer);
     for (auto& [k, v] : meshes) {
         this->creator->destroy_buffer(v->meshBuffers.indexBuffer);
         this->creator->destroy_buffer(v->meshBuffers.vertexBuffer);
@@ -369,6 +367,11 @@ void LoadedGLTF::clearAll() {
     for (auto& sampler : samplers) {
         vkDestroySampler(dv, sampler, nullptr);
     }
+
+    auto materialBuffer = this->materialDataBuffer;
+
+    this->descriptorPool.destroy_pools(dv);
+    creator->destroy_buffer(materialBuffer);
 }
 
 void LoadedGLTF::Draw(const glm::mat4& topMatrix, DrawContext& ctx) {

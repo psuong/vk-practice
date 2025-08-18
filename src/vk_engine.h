@@ -140,7 +140,7 @@ class VulkanEngine {
 
     static VulkanEngine& Get();
 
-    DescriptorAllocatorGrowable globalDescriptorAllocator;
+    DescriptorAllocator globalDescriptorAllocator;
 
     VkDescriptorSet _drawImageDescriptors;
     VkDescriptorSetLayout _drawImageDescriptorLayout;
@@ -182,7 +182,7 @@ class VulkanEngine {
     MaterialInstance defaultData;
     GLTFMetallic_Roughness metalRoughMaterial;
 
-    DrawContext mainDrawContext;
+    DrawContext drawCommands;
     std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
     std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
 
@@ -257,7 +257,10 @@ class VulkanEngine {
     void init_imgui();
 
     void init_triangle_pipeline();
+
+    [[deprecated]]
     void draw_background(VkCommandBuffer cmd);
+    void draw_main(VkCommandBuffer cmd);
     void draw_geometry(VkCommandBuffer cmd);
 
     void resize_swapchain();

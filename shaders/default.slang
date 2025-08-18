@@ -46,5 +46,5 @@ float4 frag(VSOutput input) : SV_Target {
     float lightValue = max(dot(input.normal, sceneData.sunlightDirection.xyz), 0.1f);
     float3 color = input.color * colorTexture.Sample(input.uv).xyz;
     float3 ambient = color * sceneData.ambientColor.xyz;
-    return float4(color * lightValue * sceneData.sunlightColor.w + ambient, 1.0f);
+    return float4(color, 1.0f);
 }
