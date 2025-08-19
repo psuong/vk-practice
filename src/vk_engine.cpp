@@ -840,6 +840,7 @@ void VulkanEngine::draw() {
                               this->get_current_frame()._swapchainSemaphore, VK_NULL_HANDLE, &swapchainImageIndex);
 
     if (err == VK_ERROR_OUT_OF_DATE_KHR) {
+        this->resize_requested = true;
         return;
     }
 
@@ -942,6 +943,99 @@ void VulkanEngine::draw() {
     this->_frameNumber++;
 }
 
+void VulkanEngine::drawv2() {
+    VK_CHECK(vkWaitForFences(this->_device, 1, &this->get_current_frame()._renderFence, true, 1000000000));
+
+    FrameData* frame = &this->get_current_frame();
+
+    frame->_deletionQueue.flush();
+    frame->_frameDescriptors.clear_pools(this->_device);
+
+    uint32_t swapchainImageIndex;
+
+    VkResult e = vkAcquireNextImageKHR(this->_device, this->_swapchain, 1000000000, frame->_swapchainSemaphore, nullptr,
+                                       &swapchainImageIndex);
+
+    if (e == VK_ERROR_OUT_OF_DATE_KHR) {
+        this->resize_requested = true;
+        return;
+    }
+
+    this->_drawExtent.height =
+        min(this->_swapchainExtent.height, this->_drawImage.imageExtent.height) * this->renderScale;
+    this->_drawExtent.width = min(this->_swapchainExtent.width, this->_drawImage.imageExtent.width) * this->renderScale;
+
+    VK_CHECK(vkResetFences(this->_device, 1, &frame->_renderFence));
+    VK_CHECK(vkResetCommandBuffer(frame->_mainCommandBuffer, 0));
+
+    VkCommandBuffer cmd = frame->_mainCommandBuffer;
+    VkCommandBufferBeginInfo cmdBeginInfo =
+        vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+    VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
+    vkutil::transition_image(cmd, this->_drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+
+    this->draw_background(cmd);
+
+    // For start, transition the swapchain image to a drawable layout, then
+    // clear it, and finally transition it back for display
+    vkutil::transition_image(cmd, this->_drawImage.image, VK_IMAGE_LAYOUT_GENERAL,
+                             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    vkutil::transition_image(cmd, this->_depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED,
+                             VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+    // TODO: Draw the geometry
+    this->draw_geometry(cmd);
+
+    // For start, transition the swapchain image to a drawable layout, then
+    // clear it, and finally transition it back for display
+    vkutil::transition_image(cmd, this->_drawImage.image, VK_IMAGE_LAYOUT_GENERAL,
+                             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    vkutil::transition_image(cmd, this->_depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED,
+                             VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+    // > Begin drawing imgui
+    // Execute a copy from the draw image into the swapchain
+    vkutil::copy_image_to_image(cmd, this->_drawImage.image, this->_swapchainImages[swapchainImageIndex],
+                                this->_drawExtent, this->_swapchainExtent);
+
+    // Set the swapchain image layout to present so we can show it on the
+    // screen.
+    vkutil::transition_image(cmd, this->_swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+    this->draw_imgui(cmd, this->_swapchainImageViews[swapchainImageIndex]);
+
+    // set the swapchain image layout to present to actually be able to show it on screen
+    vkutil::transition_image(cmd, this->_swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                             VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+    VK_CHECK(vkEndCommandBuffer(cmd));
+    VkCommandBufferSubmitInfo cmdInfo = vkinit::command_buffer_submit_info(cmd);
+    VkSemaphoreSubmitInfo waitInfo =
+        vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, frame->_swapchainSemaphore);
+    VkSemaphoreSubmitInfo signalInfo =
+        vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT_KHR, frame->_renderSemaphore);
+    VkSubmitInfo2 submit = vkinit::submit_info(&cmdInfo, &signalInfo, &waitInfo);
+
+    VK_CHECK(vkQueueSubmit2(this->_graphicsQueue, 1, &submit, frame->_renderFence));
+
+    VkPresentInfoKHR presentInfo = vkinit::present_info();
+    presentInfo.pSwapchains = &_swapchain;
+    presentInfo.swapchainCount = 1;
+    presentInfo.pWaitSemaphores = &get_current_frame()._renderSemaphore;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pImageIndices = &swapchainImageIndex;
+
+    VkResult presentResult = vkQueuePresentKHR(_graphicsQueue, &presentInfo);
+    if (e == VK_ERROR_OUT_OF_DATE_KHR) {
+        this->resize_requested = true;
+        return;
+    }
+    // increase the number of frames drawn
+    this->_frameNumber++;
+}
+
 void VulkanEngine::draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView) {
     VkRenderingAttachmentInfo colorAttachment =
         vkinit::attachment_info(targetImageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -953,6 +1047,9 @@ void VulkanEngine::draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView) 
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 
     vkCmdEndRendering(cmd);
+}
+
+void VulkanEngine::draw_main(VkCommandBuffer cmd) {
 }
 
 void VulkanEngine::draw_background(VkCommandBuffer cmd) {
@@ -969,9 +1066,7 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd) {
     vkCmdPushConstants(cmd, this->_gradientPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants),
                        &effect.data);
 
-    // Execute the compute pipeline dispatch. We are using 16x16
-    // workgroup size so we need to divide by it
-    // vkCmdDispatch(cmd, std::ceil(this->_drawExtent.width / 16.0), std::ceil(this->_drawExtent.height / 16.0), 1);
+    vkCmdDispatch(cmd, std::ceil(this->_windowExtent.width / 16.0), std::ceil(this->_windowExtent.height) / 16.0, 1);
 }
 
 void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
@@ -981,17 +1076,17 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     auto start = std::chrono::system_clock::now();
 
     std::vector<uint32_t> opaque_draws;
-    opaque_draws.reserve(mainDrawContext.OpaqueSurfaces.size());
+    opaque_draws.reserve(this->drawCommands.OpaqueSurfaces.size());
 
-    for (uint32_t i = 0; i < mainDrawContext.OpaqueSurfaces.size(); i++) {
-        if (is_visible(mainDrawContext.OpaqueSurfaces[i], sceneData.viewproj)) {
+    for (uint32_t i = 0; i < drawCommands.OpaqueSurfaces.size(); i++) {
+        if (is_visible(drawCommands.OpaqueSurfaces[i], sceneData.viewproj)) {
             opaque_draws.push_back(i);
         }
     }
 
-    std::sort(opaque_draws.begin(), opaque_draws.end(), [&](const auto& iA, const auto& iB) {
-        const RenderObject& A = mainDrawContext.OpaqueSurfaces[iA];
-        const RenderObject& B = mainDrawContext.OpaqueSurfaces[iB];
+    std::sort(opaque_draws.begin(), opaque_draws.end(), [&, this](const auto& iA, const auto& iB) {
+        const RenderObject& A = this->drawCommands.OpaqueSurfaces[iA];
+        const RenderObject& B = this->drawCommands.OpaqueSurfaces[iB];
         if (A.material == B.material) {
             return A.index_buffer < B.index_buffer;
         } else {
@@ -1099,10 +1194,10 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
     };
 
     for (auto& r : opaque_draws) {
-        draw(this->mainDrawContext.OpaqueSurfaces[r]);
+        draw(this->drawCommands.OpaqueSurfaces[r]);
     }
 
-    for (auto& r : this->mainDrawContext.TransparentSurfaces) {
+    for (auto& r : this->drawCommands.TransparentSurfaces) {
         draw(r);
     }
 
@@ -1179,7 +1274,8 @@ void VulkanEngine::run() {
 
         ImGui::Render();
 
-        draw();
+        this->update_scene();
+        this->drawv2();
 
         auto end = std::chrono::system_clock::now();
 
@@ -1315,18 +1411,17 @@ AllocatedImage VulkanEngine::create_image(void* data, VkExtent3D size, VkFormat 
     this->immediate_submit([&](VkCommandBuffer cmd) {
         vkutil::transition_image(cmd, new_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-        VkBufferImageCopy copyRegion = {
-            .bufferOffset = 0,
-            .bufferRowLength = 0,
-            .bufferImageHeight = 0,
-            .imageSubresource = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .mipLevel = 0,
-                .baseArrayLayer = 0,
-                .layerCount = 1,
-            },
-            .imageExtent = size
-        };
+        VkBufferImageCopy copyRegion = {.bufferOffset = 0,
+                                        .bufferRowLength = 0,
+                                        .bufferImageHeight = 0,
+                                        .imageSubresource =
+                                            {
+                                                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                                .mipLevel = 0,
+                                                .baseArrayLayer = 0,
+                                                .layerCount = 1,
+                                            },
+                                        .imageExtent = size};
 
         // copy the buffer into the image
         vkCmdCopyBufferToImage(cmd, uploadbuffer.buffer, new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
@@ -1491,7 +1586,7 @@ void VulkanEngine::update_scene() {
     this->sceneData.sunlightColor = glm::vec4(1.f);
     this->sceneData.sunlightDirection = glm::vec4(0, 1, 0.5, 1.f);
 
-    this->mainDrawContext.OpaqueSurfaces.clear();
-    this->mainDrawContext.TransparentSurfaces.clear();
-    this->loadedScenes["structure"]->Draw(glm::mat4{1.f}, this->mainDrawContext);
+    this->drawCommands.OpaqueSurfaces.clear();
+    this->drawCommands.TransparentSurfaces.clear();
+    this->loadedScenes["structure"]->Draw(glm::mat4{1.f}, this->drawCommands);
 }

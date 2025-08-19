@@ -161,6 +161,8 @@ class VulkanEngine {
     // draw loop
     void draw();
 
+    void drawv2();
+
     // draw our ui
     void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 
@@ -182,7 +184,7 @@ class VulkanEngine {
     MaterialInstance defaultData;
     GLTFMetallic_Roughness metalRoughMaterial;
 
-    DrawContext mainDrawContext;
+    DrawContext drawCommands;
     std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
     std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
 
@@ -257,6 +259,7 @@ class VulkanEngine {
     void init_imgui();
 
     void init_triangle_pipeline();
+    void draw_main(VkCommandBuffer cmd);
     void draw_background(VkCommandBuffer cmd);
     void draw_geometry(VkCommandBuffer cmd);
 

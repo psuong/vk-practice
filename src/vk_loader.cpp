@@ -555,7 +555,6 @@ std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& 
 
                                               newImage = engine->create_image(data, imagesize, VK_FORMAT_R8G8B8A8_UNORM,
                                                                               VK_IMAGE_USAGE_SAMPLED_BIT, false);
-
                                               stbi_image_free(data);
                                           }
                                       }},
