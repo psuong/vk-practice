@@ -3,7 +3,7 @@
 #include "fmt/core.h"
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/vector_float3.hpp"
-#include "glm/gtx/transform.hpp"
+#include "glm/packing.hpp"
 #include "vk_descriptors.h"
 #include "vk_loader.h"
 #include <array>
@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <functional>
 #include <span>
+#include <string>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 #define VMA_IMPLEMENTATION
@@ -59,16 +60,10 @@ void VulkanEngine::init() {
     this->init_commands();
     this->init_sync_structures();
     this->init_descriptors();
-
     this->init_pipelines();
-    this->init_imgui();
     this->init_default_data();
-
-    char buffer[MAX_PATH];
-    std::string structurePath = utils::get_relative_path(buffer, MAX_PATH, "assets\\structure.glb");
-    auto structureFile = loadGLTF(this, structurePath);
-    assert(structureFile.has_value());
-    this->loadedScenes["structure"] = *structureFile;
+    this->init_renderables();
+    this->init_imgui();
 
     // everything went fine
     this->_isInitialized = true;
@@ -264,20 +259,26 @@ void VulkanEngine::init_sync_structures() {
     // 2 semaphore to synchronize rendering with swapchain
     // The fence signals so we can wait on it on the first frame
     VkFenceCreateInfo fenceCreateInfo = vkinit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
-    VkSemaphoreCreateInfo semaphoreCreateInfo = vkinit::semaphore_create_info();
+
+    // Initialize imgui's fence
+    VK_CHECK(vkCreateFence(this->_device, &fenceCreateInfo, nullptr, &this->_immFence));
+    this->_mainDeletionQueue.push_function([=, this]() { vkDestroyFence(this->_device, this->_immFence, nullptr); });
 
     for (int i = 0; i < FRAME_OVERLAP; i++) {
         FrameData& frameData = this->_frames[i];
         VK_CHECK(vkCreateFence(this->_device, &fenceCreateInfo, nullptr, &frameData._renderFence));
 
+        VkSemaphoreCreateInfo semaphoreCreateInfo = vkinit::semaphore_create_info();
         VK_CHECK(vkCreateSemaphore(this->_device, &semaphoreCreateInfo, nullptr, &frameData._swapchainSemaphore));
         VK_CHECK(vkCreateSemaphore(this->_device, &semaphoreCreateInfo, nullptr, &frameData._renderSemaphore));
-    }
 
-    // > imgui
-    // Initialize imgui's fence
-    VK_CHECK(vkCreateFence(this->_device, &fenceCreateInfo, nullptr, &this->_immFence));
-    this->_mainDeletionQueue.push_function([=, this]() { vkDestroyFence(this->_device, this->_immFence, nullptr); });
+        this->_mainDeletionQueue.push_function([=, this]() {
+            vkDestroyCommandPool(this->_device, this->_frames[i]._commandPool, nullptr);
+            vkDestroyFence(this->_device, this->_frames[i]._renderFence, nullptr);
+            vkDestroySemaphore(this->_device, this->_frames[i]._renderSemaphore, nullptr);
+            vkDestroySemaphore(this->_device, this->_frames[i]._swapchainSemaphore, nullptr);
+        });
+    }
 }
 
 void VulkanEngine::init_descriptors() {
@@ -580,7 +581,6 @@ void VulkanEngine::init_default_data() {
     char buffer[MAX_PATH];
 
     const char* basic_mesh_path = utils::get_relative_path(buffer, MAX_PATH, "assets\\basicmesh.glb");
-    this->testMeshes = loadGltfMeshes(this, buffer).value();
 
     // 3 default textures, white, grey, black. 1 pixel each
     uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
@@ -611,11 +611,11 @@ void VulkanEngine::init_default_data() {
     sampl.magFilter = VK_FILTER_NEAREST;
     sampl.minFilter = VK_FILTER_NEAREST;
 
-    vkCreateSampler(_device, &sampl, nullptr, &_defaultSamplerNearest);
+    vkCreateSampler(_device, &sampl, nullptr, &this->_defaultSamplerNearest);
 
     sampl.magFilter = VK_FILTER_LINEAR;
     sampl.minFilter = VK_FILTER_LINEAR;
-    vkCreateSampler(_device, &sampl, nullptr, &_defaultSamplerLinear);
+    vkCreateSampler(_device, &sampl, nullptr, &this->_defaultSamplerLinear);
 
     this->_mainDeletionQueue.push_function([&, this]() {
         vkDestroySampler(this->_device, this->_defaultSamplerNearest, nullptr);
@@ -648,19 +648,68 @@ void VulkanEngine::init_default_data() {
     materialResources.dataBufferOffset = 0;
     this->defaultData = metalRoughMaterial.write_material(this->_device, MaterialPass::MainColor, materialResources,
                                                           this->globalDescriptorAllocator);
+}
 
-    // for (auto& m : this->testMeshes) {
-    //     std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
-    //     newNode->mesh = m;
-    //     newNode->localTransform = glm::mat4{1.f};
-    //     newNode->worldTransform = glm::mat4{1.f};
+void VulkanEngine::init_renderables() {
+    char buffer[MAX_PATH];
+    std::string structurePath = utils::get_relative_path(buffer, MAX_PATH, "assets\\structure.glb");
+    auto structureFile = loadGLTF(this, structurePath);
+    assert(structureFile.has_value());
+    this->loadedScenes["structure"] = *structureFile;
+}
 
-    //     for (auto& s : newNode->mesh->surfaces) {
-    //         s.material = std::make_shared<GLTFMaterial>(defaultData);
-    //     }
+void VulkanEngine::init_imgui() {
+    // Create the descriptor pool
+    VkDescriptorPoolSize poolSizes[] = {{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
+                                        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
+                                        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
+                                        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
+                                        {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
+                                        {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
+                                        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
+                                        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
+                                        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
+                                        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
+                                        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}};
 
-    //     this->loadedNodes[m->name] = std::move(newNode);
-    // }
+    VkDescriptorPoolCreateInfo poolInfo = {.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+                                           .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+                                           .maxSets = 1000,
+                                           .poolSizeCount = (uint32_t)std::size(poolSizes),
+                                           .pPoolSizes = poolSizes};
+
+    VkDescriptorPool imguiPool;
+    VK_CHECK(vkCreateDescriptorPool(this->_device, &poolInfo, nullptr, &imguiPool));
+
+    // Initialize the imgui lib
+    ImGui::CreateContext();
+    ImGui_ImplSDL2_InitForVulkan(this->_window);
+
+    ImGui_ImplVulkan_InitInfo initInfo = {.Instance = this->_instance,
+                                          .PhysicalDevice = this->_chosenGPU,
+                                          .Device = this->_device,
+                                          .Queue = this->_graphicsQueue,
+                                          .DescriptorPool = imguiPool,
+                                          .MinImageCount = 3,
+                                          .ImageCount = 3,
+                                          .UseDynamicRendering = true};
+
+    // Use dynamic rendering params for imgui
+    initInfo.PipelineRenderingCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .colorAttachmentCount = 1,
+        .pColorAttachmentFormats = &this->_swapchainImageFormat,
+    };
+
+    initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+
+    ImGui_ImplVulkan_Init(&initInfo);
+    ImGui_ImplVulkan_CreateFontsTexture();
+
+    this->_mainDeletionQueue.push_function([=, this]() {
+        ImGui_ImplVulkan_Shutdown();
+        vkDestroyDescriptorPool(this->_device, imguiPool, nullptr);
+    });
 }
 
 bool is_visible(const RenderObject& obj, const glm::mat4& viewproj) {
@@ -722,60 +771,6 @@ void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& f
     VK_CHECK(vkWaitForFences(this->_device, 1, &this->_immFence, true, 99999999));
 }
 
-void VulkanEngine::init_imgui() {
-    // Create the descriptor pool
-    VkDescriptorPoolSize poolSizes[] = {{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
-                                        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
-                                        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
-                                        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
-                                        {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
-                                        {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
-                                        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
-                                        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
-                                        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
-                                        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
-                                        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}};
-
-    VkDescriptorPoolCreateInfo poolInfo = {.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-                                           .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-                                           .maxSets = 1000,
-                                           .poolSizeCount = (uint32_t)std::size(poolSizes),
-                                           .pPoolSizes = poolSizes};
-
-    VkDescriptorPool imguiPool;
-    VK_CHECK(vkCreateDescriptorPool(this->_device, &poolInfo, nullptr, &imguiPool));
-
-    // Initialize the imgui lib
-    ImGui::CreateContext();
-    ImGui_ImplSDL2_InitForVulkan(this->_window);
-
-    ImGui_ImplVulkan_InitInfo initInfo = {.Instance = this->_instance,
-                                          .PhysicalDevice = this->_chosenGPU,
-                                          .Device = this->_device,
-                                          .Queue = this->_graphicsQueue,
-                                          .DescriptorPool = imguiPool,
-                                          .MinImageCount = 3,
-                                          .ImageCount = 3,
-                                          .UseDynamicRendering = true};
-
-    // Use dynamic rendering params for imgui
-    initInfo.PipelineRenderingCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-        .colorAttachmentCount = 1,
-        .pColorAttachmentFormats = &this->_swapchainImageFormat,
-    };
-
-    initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-
-    ImGui_ImplVulkan_Init(&initInfo);
-    ImGui_ImplVulkan_CreateFontsTexture();
-
-    this->_mainDeletionQueue.push_function([=, this]() {
-        ImGui_ImplVulkan_Shutdown();
-        vkDestroyDescriptorPool(this->_device, imguiPool, nullptr);
-    });
-}
-
 void VulkanEngine::cleanup() {
     if (_isInitialized) {
         vkDeviceWaitIdle(this->_device);
@@ -784,20 +779,14 @@ void VulkanEngine::cleanup() {
         // Free the command pool
         for (int i = 0; i < FRAME_OVERLAP; i++) {
             FrameData& frameData = this->_frames[i];
-            vkDestroyCommandPool(this->_device, frameData._commandPool, nullptr);
+            // vkDestroyCommandPool(this->_device, frameData._commandPool, nullptr);
 
-            // Destroy the sync objects
-            vkDestroyFence(this->_device, frameData._renderFence, nullptr);
-            vkDestroySemaphore(this->_device, frameData._renderSemaphore, nullptr);
-            vkDestroySemaphore(this->_device, frameData._swapchainSemaphore, nullptr);
+            // // Destroy the sync objects
+            // vkDestroyFence(this->_device, frameData._renderFence, nullptr);
+            // vkDestroySemaphore(this->_device, frameData._renderSemaphore, nullptr);
+            // vkDestroySemaphore(this->_device, frameData._swapchainSemaphore, nullptr);
 
             frameData._deletionQueue.flush();
-        }
-
-        // Cleanup all of the loaded meshes
-        for (auto& mesh : this->testMeshes) {
-            this->destroy_buffer(mesh->meshBuffers.indexBuffer);
-            this->destroy_buffer(mesh->meshBuffers.vertexBuffer);
         }
 
         metalRoughMaterial.clear_resources(this->_device);
@@ -1275,7 +1264,7 @@ void VulkanEngine::run() {
         ImGui::Render();
 
         this->update_scene();
-        this->drawv2();
+        this->draw();
 
         auto end = std::chrono::system_clock::now();
 

@@ -237,8 +237,6 @@ class VulkanEngine {
     GPUSceneData sceneData;
     VkDescriptorSetLayout _singleImageDescriptorLayout;
 
-    std::vector<std::shared_ptr<MeshAsset>> testMeshes;
-
     bool resize_requested;
 
     void init_vulkan();
@@ -254,6 +252,7 @@ class VulkanEngine {
     void init_mesh_pipeline();
 
     void init_default_data();
+    void init_renderables();
 
     void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
     void init_imgui();
