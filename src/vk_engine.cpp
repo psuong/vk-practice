@@ -370,17 +370,17 @@ void VulkanEngine::init_triangle_pipeline() {
 
     vkutil::PipelineBuilder pipelineBuilder;
     pipelineBuilder._pipelineLayout = this->_trianglePipelineLayout;
-    this->_trianglePipeline = pipelineBuilder.set_shaders(triangleVertexShader, triangleFragShader)
-                                  .set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-                                  .set_polygon_mode(VK_POLYGON_MODE_FILL)
-                                  .set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
-                                  .set_multisampling_none()
-                                  .disable_blending()
-                                  .disable_depthtest()
-                                  .set_color_attachment_format(this->_drawImage.imageFormat)
-                                  .set_depth_format(VK_FORMAT_D32_SFLOAT)
-                                  .enable_blending_additive()
-                                  .build_pipeline(this->_device, "triangle_pipeline");
+    pipelineBuilder.set_shaders(triangleVertexShader, triangleFragShader);
+    pipelineBuilder.set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+    pipelineBuilder.set_polygon_mode(VK_POLYGON_MODE_FILL);
+    pipelineBuilder.set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+    pipelineBuilder.set_multisampling_none();
+    pipelineBuilder.disable_blending();
+    pipelineBuilder.disable_depthtest();
+    pipelineBuilder.set_color_attachment_format(this->_drawImage.imageFormat);
+    pipelineBuilder.set_depth_format(VK_FORMAT_D32_SFLOAT);
+    pipelineBuilder.enable_blending_additive();
+    this->_trianglePipeline = pipelineBuilder.build_pipeline(this->_device, "triangle_pipeline");
 
     vkDestroyShaderModule(this->_device, triangleFragShader, nullptr);
     vkDestroyShaderModule(this->_device, triangleVertexShader, nullptr);
@@ -428,16 +428,16 @@ void VulkanEngine::init_mesh_pipeline() {
     vkutil::PipelineBuilder pipelineBuilder;
     pipelineBuilder._pipelineLayout = this->_meshPipelineLayout;
 
-    this->_meshPipeline = pipelineBuilder.set_shaders(triangleVertexShader, triangleFragShader)
-                              .set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-                              .set_polygon_mode(VK_POLYGON_MODE_FILL)
-                              .set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
-                              .set_multisampling_none()
-                              .disable_blending()
-                              .enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL)
-                              .set_color_attachment_format(this->_drawImage.imageFormat)
-                              .set_depth_format(this->_depthImage.imageFormat)
-                              .build_pipeline(this->_device, "mesh_pipeline");
+    pipelineBuilder.set_shaders(triangleVertexShader, triangleFragShader);
+    pipelineBuilder.set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+    pipelineBuilder.set_polygon_mode(VK_POLYGON_MODE_FILL);
+    pipelineBuilder.set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+    pipelineBuilder.set_multisampling_none();
+    pipelineBuilder.disable_blending();
+    pipelineBuilder.enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
+    pipelineBuilder.set_color_attachment_format(this->_drawImage.imageFormat);
+    pipelineBuilder.set_depth_format(this->_depthImage.imageFormat);
+    this->_meshPipeline = pipelineBuilder.build_pipeline(this->_device, "mesh_pipeline");
 
     // Destroy the shaders
     vkDestroyShaderModule(this->_device, triangleFragShader, nullptr);
@@ -652,7 +652,7 @@ void VulkanEngine::init_default_data() {
 
 void VulkanEngine::init_renderables() {
     char buffer[MAX_PATH];
-    std::string structurePath = utils::get_relative_path(buffer, MAX_PATH, "assets\\structure.glb");
+    std::string structurePath = utils::get_relative_path(buffer, MAX_PATH, "assets\\structure_mat.glb");
     auto structureFile = loadGLTF(this, structurePath);
     assert(structureFile.has_value());
     this->loadedScenes["structure"] = *structureFile;
@@ -1109,9 +1109,6 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
 
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-    // launch a draw command to draw 3 vertices
-    // vkCmdDraw(cmd, 3, 1, 0, 0);
-
     AllocatedBuffer gpuSceneDataBuffer = this->create_buffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                                              VMA_MEMORY_USAGE_CPU_TO_GPU, "GPU Scene Data");
 
@@ -1186,9 +1183,9 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
         draw(this->drawCommands.OpaqueSurfaces[r]);
     }
 
-    for (auto& r : this->drawCommands.TransparentSurfaces) {
-        draw(r);
-    }
+    // for (auto& r : this->drawCommands.TransparentSurfaces) {
+    //     draw(r);
+    // }
 
     vkCmdEndRendering(cmd);
 
@@ -1437,13 +1434,13 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine) {
     VkShaderModule meshFragShader;
 
     char buffer[MAX_PATH];
-    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\default_frag.spv"),
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\mesh_frag_frag.spv"),
                                     engine->_device, &meshFragShader)) {
         fmt::println("Error when building the triangle fragment shader module!");
     }
 
     VkShaderModule meshVertexShader;
-    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\default_vert.spv"),
+    if (!vkutil::load_shader_module(utils::get_relative_path(buffer, MAX_PATH, "shaders\\mesh_vert_vert.spv"),
                                     engine->_device, &meshVertexShader)) {
         fmt::println("Error when building the triangle vertex shader module!");
     }
@@ -1479,24 +1476,24 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine) {
     // build the stage-create-info for both vertex and fragment stages. This lets the pipeline know the shader modules
     // per stage
     vkutil::PipelineBuilder pipelineBuilder;
-    pipelineBuilder.set_shaders(meshVertexShader, meshFragShader)
-        .set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-        .set_polygon_mode(VK_POLYGON_MODE_FILL)
-        .set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
-        .set_multisampling_none()
-        .disable_blending()
-        .enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL)
-        .set_color_attachment_format(engine->_drawImage.imageFormat)
-        .set_depth_format(engine->_depthImage.imageFormat);
-
+    pipelineBuilder.set_shaders(meshVertexShader, meshFragShader);
+    pipelineBuilder.set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+    pipelineBuilder.set_polygon_mode(VK_POLYGON_MODE_FILL);
+    pipelineBuilder.set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+    pipelineBuilder.set_multisampling_none();
+    pipelineBuilder.disable_blending();
+    pipelineBuilder.disable_depthtest();
+    // pipelineBuilder.enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
+    pipelineBuilder.set_color_attachment_format(engine->_drawImage.imageFormat);
+    pipelineBuilder.set_depth_format(engine->_depthImage.imageFormat);
     pipelineBuilder._pipelineLayout = newLayout;
 
     opaquePipeline.pipeline = pipelineBuilder.build_pipeline(engine->_device, "Opaque");
 
     // Create the transparent values
-    transparentPipeline.pipeline = pipelineBuilder.enable_blending_additive()
-                                       .enable_depthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL)
-                                       .build_pipeline(engine->_device, "Transparent");
+    pipelineBuilder.enable_blending_additive();
+    pipelineBuilder.enable_depthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL);
+    transparentPipeline.pipeline = pipelineBuilder.build_pipeline(engine->_device, "Transparent");
 
     vkDestroyShaderModule(engine->_device, meshFragShader, nullptr);
     vkDestroyShaderModule(engine->_device, meshVertexShader, nullptr);
