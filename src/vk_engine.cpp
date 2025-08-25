@@ -1482,8 +1482,7 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine) {
     pipelineBuilder.set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
     pipelineBuilder.set_multisampling_none();
     pipelineBuilder.disable_blending();
-    // pipelineBuilder.disable_depthtest();
-    pipelineBuilder.enable_depthtest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
+    pipelineBuilder.enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
     pipelineBuilder.set_color_attachment_format(engine->_drawImage.imageFormat);
     pipelineBuilder.set_depth_format(engine->_depthImage.imageFormat);
     pipelineBuilder._pipelineLayout = newLayout;
@@ -1492,7 +1491,7 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine) {
 
     // Create the transparent values
     pipelineBuilder.enable_blending_additive();
-    pipelineBuilder.enable_depthtest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
+    pipelineBuilder.enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
     transparentPipeline.pipeline = pipelineBuilder.build_pipeline(engine->_device, "Transparent");
 
     vkDestroyShaderModule(engine->_device, meshFragShader, nullptr);
@@ -1561,7 +1560,7 @@ void VulkanEngine::update_scene() {
 
     glm::mat4 view = mainCamera.getViewMatrix();
     glm::mat4 proj = glm::perspective(
-        glm::radians(70.f), (float)this->_windowExtent.width / (float)this->_windowExtent.height, 0.1f, 1000.f);
+        glm::radians(70.f), (float)this->_windowExtent.width / (float)this->_windowExtent.height, 1000.f, 0.1f);
 
     proj[1][1] *= -1;
     this->sceneData.view = view;
