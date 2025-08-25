@@ -652,7 +652,7 @@ void VulkanEngine::init_default_data() {
 
 void VulkanEngine::init_renderables() {
     char buffer[MAX_PATH];
-    std::string structurePath = utils::get_relative_path(buffer, MAX_PATH, "assets\\structure_mat.glb");
+    std::string structurePath = utils::get_relative_path(buffer, MAX_PATH, "assets\\structure.glb");
     auto structureFile = loadGLTF(this, structurePath);
     assert(structureFile.has_value());
     this->loadedScenes["structure"] = *structureFile;
@@ -1183,9 +1183,9 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd) {
         draw(this->drawCommands.OpaqueSurfaces[r]);
     }
 
-    // for (auto& r : this->drawCommands.TransparentSurfaces) {
-    //     draw(r);
-    // }
+    for (auto& r : this->drawCommands.TransparentSurfaces) {
+        draw(r);
+    }
 
     vkCmdEndRendering(cmd);
 
@@ -1482,8 +1482,8 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine) {
     pipelineBuilder.set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
     pipelineBuilder.set_multisampling_none();
     pipelineBuilder.disable_blending();
-    pipelineBuilder.disable_depthtest();
-    // pipelineBuilder.enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
+    // pipelineBuilder.disable_depthtest();
+    pipelineBuilder.enable_depthtest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
     pipelineBuilder.set_color_attachment_format(engine->_drawImage.imageFormat);
     pipelineBuilder.set_depth_format(engine->_depthImage.imageFormat);
     pipelineBuilder._pipelineLayout = newLayout;
@@ -1492,7 +1492,7 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine) {
 
     // Create the transparent values
     pipelineBuilder.enable_blending_additive();
-    pipelineBuilder.enable_depthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL);
+    pipelineBuilder.enable_depthtest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
     transparentPipeline.pipeline = pipelineBuilder.build_pipeline(engine->_device, "Transparent");
 
     vkDestroyShaderModule(engine->_device, meshFragShader, nullptr);
